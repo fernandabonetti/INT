@@ -7,24 +7,28 @@
         "h5"
     ],
     "switches": {
-        "s0": {},
-        "s1": {},
-        "s2": {},
-        "s3": {},
-        "s4": {},
-        "s5": {},
-        "s6": {},
-        "s7": {},
-        "s8": {},
-        "s9": {}
+        "s0": {"runtime-json" : "s0-runtime.json" },
+        "s1": {"runtime-json" : "s1-runtime.json" },
+        "s2": {"runtime-json" : "s2-runtime.json" },
+        "s3": {"runtime-json" : "s3-runtime.json" },
+        "s4": {"runtime-json" : "s4-runtime.json" },
+        "s5": {"runtime-json" : "s5-runtime.json" },
+        "s6": {"runtime-json" : "s6-runtime.json" },
+        "s7": {"runtime-json" : "s7-runtime.json" },
+        "s8": {"runtime-json" : "s8-runtime.json" },
+        "s9": {"runtime-json" : "s9-runtime.json" }
     },
     "links": [
-        ["s0", "s1"], ["s0", "s2"], ["s1", "s2"],
-        ["h1", "s2"], ["s2", "h5"], ["s2", "s3"],
-        ["s3", "s4"], ["s3", "s5"], ["s5", "s4"],
-        ["h2", "s5"], ["s4", "s6"], ["s5", "s7"],
-        ["s6", "s7"], ["s6", "s8"], ["s6", "s9"],
-        ["s7", "s8"], ["s7", "s9"], ["s7", "h3"],
-        ["s8", "s9"], ["s9", "h4"], ["s8", "h4"]
+        ["s0", "s1"], ["s0", "s2"],
+        ["s1", "s2"], ["h1", "s2"],
+        ["s2", "h5"], ["h5", "s6"],
+        ["s2", "s3"], ["s3", "s4"], 
+        ["s3", "s5"], ["s5", "s4"],
+        ["h2", "s5"], ["s4", "s6"],
+        ["s5", "s7"], ["s6", "s7"],
+        ["s6", "s8"], ["s6", "s9"],
+        ["s7", "s8"], ["s7", "s9"], 
+        ["s7", "h3"], ["s8", "s9"],
+        ["s9", "h4"], ["s8", "h4"]
     ]
 }
