@@ -4,43 +4,129 @@
 
 const bit<16> TYPE_IPV4 = 0x800;
 
+#define MAX_HOPS 9
+
 /*************************************************************************
 *********************** H E A D E R S  ***********************************
 *************************************************************************/
 
-typedef bit<9>  egressSpec_t;
-typedef bit<48> macAddr_t;
-typedef bit<32> ip4Addr_t;
-
 header ethernet_t {
-    macAddr_t dstAddr;
-    macAddr_t srcAddr;
-    bit<16>   etherType;
+    bit<48> dstAddr;
+    bit<48> srcAddr;
+    bit<16> etherType;
 }
 
 header ipv4_t {
-    bit<4>    version;
-    bit<4>    ihl;
-    bit<8>    diffserv;
-    bit<16>   totalLen;
-    bit<16>   identification;
-    bit<3>    flags;
-    bit<13>   fragOffset;
-    bit<8>    ttl;
-    bit<8>    protocol;
-    bit<16>   hdrChecksum;
-    ip4Addr_t srcAddr;
-    ip4Addr_t dstAddr;
+    bit<4> version;
+    bit<4> ihl;
+    bit<6> dscp;
+    bit<2> ecn;
+    bit<16> totalLen;
+    bit<16> identification;
+    bit<3> flags;
+    bit<13> fragOffset;
+    bit<8> ttl;
+    bit<8> protocol;
+    bit<16> hdrChecksum;
+    bit<32> srcAddr;
+    bit<32> dstAddr;
+}
+
+header tcp_hdr {
+    bit<16> srcAddr;
+    bit<16> dstAddr;
+    bit<32> seqNumber;
+    bit<32> ackNumber;
+    bit<4> dataOffset;
+    bit<4> res;
+    bit<8> flags;
+    bit<16> window;
+    bit<16> checksum;
+    bit<16> urgentPtr;
+}
+
+header shim_t {
+    bit<8> int_type;
+    bit<8> rsvd1;
+    bit<8> len;
+    bit<6> dscp;
+    bit<2> rsvd2
+}
+
+header int_header_t {
+    bit<4> ver;
+    bit<2> rep;
+    bit<1> c;
+    bit<1> e;
+    bit<1> m;
+    bit<7> rsvd1;
+    bit<3> rsvd2;
+    bit<5> hop_metadata_len;
+    bit<8> remaining_hop_cnt;
+    bit<4> instruction_mask_0003;
+    bit<4> instruction_mask_0407;
+    bit<4> instruction_mask_0811;
+    bit<4> instruction_mask_1215;
+    bit<16> rsvd3;
+}
+
+header switch_id_t {
+    bit<32> sw_id;
+}
+
+header ingress_timestamp {
+    bit<32> in_timestamp;
+}
+
+header egress_timestamp {
+    bit<32> eg_timestamp;
+}
+
+header queue_info {
+    bit<8>  id;
+    bit<24> q_length;    
+}
+
+header hop_delay_t {
+    bit<32> hop_delay;
+}
+
+/* forget this little friend
+header competitors{
+
+}
+*/
+struct headers {
+    ethernet_t          ethernet;
+    ipv4_t              ipv4;
+    tcp_hdr             tcp;
+    shim_t              shim;
+    int_header_t        int_header;
+    switch_id_t         switch_id;
+    hop_delay_t         hop_delay;
+    queue_info          queue;
+    ingress_timestamp   in_timestamp;
+    egress_timestamp    eg_timestamp;
+}
+
+//switch internal variables
+struct int_metadata_t {
+    bit<16> insert_pos;
+    bit<8>  int_hdr_word_len;
+    bit<32> switch_id;
+}
+
+struct fwd_metadata_t {
+    bit<16> 13_mtu;
+    bit<16> checksum_state;
 }
 
 struct metadata {
-    /* empty */
+    int_metadata_t int_metadata;
+    fwd_metadata_t fwd_metadata;
 }
 
-struct headers {
-    ethernet_t   ethernet;
-    ipv4_t       ipv4;
-}
+
 
 /*************************************************************************
 *********************** P A R S E R  ***********************************
@@ -52,8 +138,11 @@ parser MyParser(packet_in packet,
                 inout standard_metadata_t standard_metadata) {
 
     state start {
-        /* TODO: add parser logic */
-        transition accept;
+        transition parse_ethernet;    
+    }
+
+    state parse_ethernet {
+
     }
 }
 
