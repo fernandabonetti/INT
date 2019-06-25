@@ -17,16 +17,16 @@ header ethernet_t {
 }
 
 header ipv4_t {
-    bit<4> version;
-    bit<4> ihl;
-    bit<6> dscp;
-    bit<2> ecn;
+    bit<4>  version;
+    bit<4>  ihl;
+    bit<6>  dscp;
+    bit<2>  ecn;
     bit<16> totalLen;
     bit<16> identification;
-    bit<3> flags;
+    bit<3>  flags;
     bit<13> fragOffset;
-    bit<8> ttl;
-    bit<8> protocol;
+    bit<8>  ttl;
+    bit<8>  protocol;
     bit<16> hdrChecksum;
     bit<32> srcAddr;
     bit<32> dstAddr;
@@ -37,9 +37,9 @@ header tcp_hdr {
     bit<16> dstAddr;
     bit<32> seqNumber;
     bit<32> ackNumber;
-    bit<4> dataOffset;
-    bit<4> res;
-    bit<8> flags;
+    bit<4>  dataOffset;
+    bit<4>  res;
+    bit<8>  flags;
     bit<16> window;
     bit<16> checksum;
     bit<16> urgentPtr;
@@ -126,7 +126,9 @@ struct metadata {
     fwd_metadata_t fwd_metadata;
 }
 
-
+error {
+    BadIPv4HeaderChecksum
+}
 
 /*************************************************************************
 *********************** P A R S E R  ***********************************
@@ -136,13 +138,71 @@ parser MyParser(packet_in packet,
                 out headers hdr,
                 inout metadata meta,
                 inout standard_metadata_t standard_metadata) {
+    
+    InternetChecksum() ck;                
 
     state start {
         transition parse_ethernet;    
     }
 
     state parse_ethernet {
+        packet.extract(hdr.ethernet);
+        transition select(hdr.ethernet.etherType){
+            TYPE_IPV4 : parse_ipv4;
+            default accept;
+        }
+    }
 
+    state parse_ipv4 {
+        packet.extract(hdr.ipv4);
+
+        ck.clear();
+        ck.add({
+                hdr.ipv4.version,
+                hdr.ipv4.ihl, 
+                hdr.ipv4.dscp, 
+                hdr.ipv4.ecn,
+                hdr.ipv4.totalLen,
+                hdr.ipv4.identification,
+                hdr.ipv4.flags, 
+                hdr.ipv4.fragOffset,
+                hdr.ipv4.ttl, 
+                hdr.ipv4.protocol,
+                hdr.ipv4.srcAddr,
+                hdr.ipv4.dstAddr
+        });
+
+        verify(hdr.ipv4.hdrChecksum == ck.get(), error.BadIPv4HeaderChecksum);
+        ck.clear();
+
+        ck.subtract({
+            hdr.ipv4.srcAddr,
+            hdr.ipv4.dstAddr,
+            hdr.ipv4.totalLen
+        });
+
+        transition select(hdr.ipv4.protocol) {
+            6       : parse_tcp;
+            default : accept;
+        }
+    }
+
+    state parse_tcp {
+        packet.extract(hdr.tcp);
+        ck.subtract({
+            hdr.tcp.srcPort,
+            hdr.tcp.dstPort,
+            hdr.tcp.seqNo,
+            hdr.tcp.ackNo,
+            hdr.tcp.dataOffset, hdr.tcp.res,
+            hdr.tcp.flags,
+            hdr.tcp.window,
+            hdr.tcp.checksum,
+            hdr.tcp.urgentPtr
+        });
+        meta.fwd_metadata.checksum_state = ck.get_state();
+
+        transition accept;
     }
 }
 
@@ -163,12 +223,13 @@ control MyVerifyChecksum(inout headers hdr, inout metadata meta) {
 control MyIngress(inout headers hdr,
                   inout metadata meta,
                   inout standard_metadata_t standard_metadata) {
+
     action drop() {
         mark_to_drop(standard_metadata);
     }
     
     action ipv4_forward(macAddr_t dstAddr, egressSpec_t port) {
-        /* TODO: fill out code in action body */
+        hdr.ipv4.ttl = hdr.ipv4.ttl - 1; 
     }
     
     table ipv4_lpm {
@@ -185,10 +246,9 @@ control MyIngress(inout headers hdr,
     }
     
     apply {
-        /* TODO: fix ingress control logic
-         *  - ipv4_lpm should be applied only when IPv4 header is valid
-         */
-        ipv4_lpm.apply();
+        if(hdr.ipv4.isValid()){ 
+            ipv4_lpm.apply();
+        }
     }
 }
 
@@ -196,11 +256,194 @@ control MyIngress(inout headers hdr,
 ****************  E G R E S S   P R O C E S S I N G   *******************
 *************************************************************************/
 
-control MyEgress(inout headers hdr,
-                 inout metadata meta,
-                 inout standard_metadata_t standard_metadata) {
-    apply {  }
+const bit<6> DSCP_INT = 0x17;
+const bit<6> DSCP_MASK = 0x3F;
+
+control EgressParser(packet_in packet,
+                out headers hdr,
+                inout metadata meta,
+                inout standard_metadata_t standard_metadata) {
+    InternetChecksum() ck;                
+    
+    state start{
+        transition parse_ethernet;
+    }
+
+    state parse_ethernet{
+        packet.extract(hdr.ethernet);
+        transition select(hdr.ethernet.etherType) {
+            TYPE_IPV4 : parse_ipv4;
+            default   : accept;
+        }
+    }
+
+    state parse_ipv4 {
+        packet.extract(hdr.ipv4);
+        transition select(hdr.ipv4.protocol) {
+            6       : parse_tcp;
+            default : accept;
+        }
+    }
+
+    state parse_tcp {
+        packet.extract(hdr.tcp);
+        transition select(hdr.ipv4.dscp) {
+        DSCP_INT &&& DSCP_MASK: parse_shim;
+        default: accept;
+    }
+
+    state parse_shim {
+        packet.extract(hdr.shim);
+        ck.subtract({
+            hdr.shim.int_type,
+            hdr.shim.rsvd1,
+            hdr.shim.len,
+            hdr.shim.dscp,
+            hdr.shim.rsvd2
+        });
+        transition parse_int_header;
+    }
+
+    state parse_int_header {
+        packet.extract(hdr.int_header);
+        ck.subtract({
+            hdr.int_header.ver, 
+            hdr.int_header.rep,
+            hdr.int_header.c, 
+            hdr.int_header.e,
+            hdr.int_header.m, 
+            hdr.int_header.rsvd1,
+            hdr.int_header.rsvd2, 
+            hdr.int_header.hop_metadata_len,
+            hdr.int_header.remaining_hop_cnt,
+            hdr.int_header.instruction_mask_0003,
+            hdr.int_header.instruction_mask_0407,
+            hdr.int_header.instruction_mask_0811,
+            hdr.int_header.instruction_mask_1215,
+            hdr.int_header.rsvd3
+        });
+        meta.fwd_metadata.checksum_state = ck.get_state();
+        transition accept;
+    }
 }
+
+/*************************************************************************
+***********************  D E P A R S E R  *******************************
+*************************************************************************/
+
+control EgressDeparser(packet_out packet,
+                       inout headers hdr,
+                       in metadata meta) {
+    InternetChecksum() ck;
+    
+    apply {
+        if (hdr.ipv4.isValid()) {
+            ck.clear();
+            ck.add({
+                hdr.ipv4.version, 
+                hdr.ipv4.ihl, 
+                hdr.ipv4.dscp, 
+                hdr.ipv4.ecn,
+                hdr.ipv4.totalLen,
+                hdr.ipv4.identification,
+                hdr.ipv4.flags, 
+                hdr.ipv4.fragOffset,
+                hdr.ipv4.ttl, 
+                hdr.ipv4.protocol,
+                hdr.ipv4.srcAddr,
+                hdr.ipv4.dstAddr
+            });
+            hdr.ipv4.hdrChecksum = ck.get();
+        }
+    
+        ck.set_state(meta.fwd_metadata.checksum_state);
+
+        if (hdr.ipv4.isValid()) {
+            ck.add({
+                hdr.ipv4.srcAddr,
+                hdr.ipv4.dstAddr,
+                hdr.ipv4.totalLen
+            });
+        }
+
+        if (hdr.shim.isValid()) {
+            ck.add({
+                hdr.shim.int_type,
+                hdr.shim.rsvd1,
+                hdr.shim.len,
+                hdr.shim.dscp,
+                hdr.shim.rsvd2
+            });
+        }
+
+        if (hdr.int_header.isValid()) {
+            ck.add({
+                hdr.int_header.ver,
+                hdr.int_header.rep,
+                hdr.int_header.c, 
+                hdr.int_header.e,
+                hdr.int_header.m, 
+                hdr.int_header.rsvd1,
+                hdr.int_header.rsvd2, 
+                hdr.int_header.hop_metadata_len,
+                hdr.int_header.remaining_hop_cnt,
+                hdr.int_header.instruction_mask_0003,
+                hdr.int_header.instruction_mask_0407,
+                hdr.int_header.instruction_mask_0811,
+                hdr.int_header.instruction_mask_1215,
+                hdr.int_header.rsvd3
+            });
+        }
+
+        if (hdr.switch_id.isValid()) {
+            ck.add({hdr.switch_id.sw_id});
+        }
+
+        if (hdr.hop_delay.isValid()) {
+            ck.add({hdr.hop_delay.hop_delay});
+        }
+
+		if (hdr.queue.isValid()) {
+			ck.add({
+				hdr.queue.id,
+				hdr.queue.q_length
+			});
+		}
+
+		if (hdr.in_timestamp.isValid()) {
+			ck.add({hdr.in_timestamp.in_timestamp});
+		}
+
+		if (hdr.eg_timestamp.isValid()) {
+			ck.add({hdr.eg_timestamp.eg_timestamp});
+		}
+
+		if (hdr.tcp.isValid()) {
+			ck.add({
+				hdr.tcp.srcPort,
+				hdr.tcp.dstPort,
+				hdr.tcp.seqNo,
+				hdr.tcp.ackNo,
+				hdr.tcp.dataOffset, hdr.tcp.res,
+				hdr.tcp.flags,
+				hdr.tcp.window,
+				hdr.tcp.urgentPtr
+			});
+			hdr.tcp.checksum = ck.get();
+		}
+		packet.emit(hdr.ethernet);
+		packet.emit(hdr.ipv4);
+		packet.emit(hdr.tcp);
+		packet.emit(hdr.shim);
+		packet.emit(hdr.int_header);
+		packet.emit(hdr.switch_id);
+		packet.emit(hdr.hop_delay);
+		packet.emit(hdr.queue);
+		packet.emit(hdr.in_timestamp);
+		packet.emit(hdr.eg_timestamp);
+	}
+	
+}   
 
 /*************************************************************************
 *************   C H E C K S U M    C O M P U T A T I O N   **************
@@ -209,33 +452,24 @@ control MyEgress(inout headers hdr,
 control MyComputeChecksum(inout headers hdr, inout metadata meta) {
      apply {
 	update_checksum(
-	    hdr.ipv4.isValid(),
-            { hdr.ipv4.version,
-	      hdr.ipv4.ihl,
-              hdr.ipv4.diffserv,
-              hdr.ipv4.totalLen,
-              hdr.ipv4.identification,
-              hdr.ipv4.flags,
-              hdr.ipv4.fragOffset,
-              hdr.ipv4.ttl,
-              hdr.ipv4.protocol,
-              hdr.ipv4.srcAddr,
-              hdr.ipv4.dstAddr },
+	    hdr.ipv4.isValid(), {
+            hdr.ipv4.version,
+	        hdr.ipv4.ihl,
+            hdr.ipv4.diffserv,
+            hdr.ipv4.totalLen,
+            hdr.ipv4.identification,
+            hdr.ipv4.flags,
+            hdr.ipv4.fragOffset,
+            hdr.ipv4.ttl,
+            hdr.ipv4.protocol,
+            hdr.ipv4.srcAddr,
+            hdr.ipv4.dstAddr },
             hdr.ipv4.hdrChecksum,
             HashAlgorithm.csum16);
     }
 }
 
 
-/*************************************************************************
-***********************  D E P A R S E R  *******************************
-*************************************************************************/
-
-control MyDeparser(packet_out packet, in headers hdr) {
-    apply {
-        /* TODO: add deparser logic */
-    }
-}
 
 /*************************************************************************
 ***********************  S W I T C H  *******************************
