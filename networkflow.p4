@@ -6,9 +6,6 @@ const bit<16> TYPE_IPV4 = 0x800;
 
 #define MAX_HOPS 9
 
-/*************************************************************************
-*********************** H E A D E R S  ***********************************
-*************************************************************************/
 
 header ethernet_t {
     bit<48> dstAddr;
@@ -71,45 +68,64 @@ header int_header_t {
 }
 
 header switch_id_t {
-    bit<32> sw_id;
+	bit<32> sw_id;
+}
+
+header level1_port_id_t {
+	bit<16> ingress_port_id;
+	bit<16> egress_port_id;
+}
+
+header level2_port_id_t {
+	bit<16> ingress_port_id;
+	bit<16> egress_port_id;
 }
 
 header ingress_timestamp {
-    bit<32> in_timestamp;
+	bit<32> in_timestamp;
 }
 
 header egress_timestamp {
-    bit<32> eg_timestamp;
+	bit<32> eg_timestamp;
 }
 
 header queue_info {
-    bit<8>  id;
-    bit<24> q_length;    
+	bit<8>  id;
+	bit<24> q_length;    
 }
 
 header hop_delay_t {
-    bit<32> hop_delay;
+	bit<32> hop_delay;
 }
 
-/* forget this little friend
-header competitors{
-
+//TX utilization of egress port
+header egress_port_tx_util_t {
+	bit<32> egress_port_tx_util;
 }
-*/
+
 struct headers {
-    ethernet_t          ethernet;
-    ipv4_t              ipv4;
-    tcp_hdr             tcp;
-    shim_t              shim;
-    int_header_t        int_header;
-    switch_id_t         switch_id;
-    hop_delay_t         hop_delay;
-    queue_info          queue;
-    ingress_timestamp   in_timestamp;
-    egress_timestamp    eg_timestamp;
+    ethernet_t          	ethernet;
+    ipv4_t              	ipv4;
+    tcp_hdr             	tcp;
+    shim_t              	shim;
+    int_header_t        	int_header;
+    switch_id_t         	switch_id;
+	level1_port_id_t		level1_port_id;
+	level2_port_id_t		level2_port_id;
+    hop_delay_t         	hop_delay;
+    queue_info          	queue;
+    ingress_timestamp   	in_timestamp;
+    egress_timestamp    	eg_timestamp;
+	egress_port_tx_util_t egress_port_tx_util;
 }
 
-//switch internal variables
+//Both types are defined in P4 PSA 
+struct ingress_input_metadata_t {
+	PortId_t 	ingress_port;
+	Timestamp_t ingress_timestamp;
+}
+
+//Switch internal variables
 struct int_metadata_t {
     bit<16> insert_pos;
     bit<8>  int_hdr_word_len;
@@ -122,8 +138,9 @@ struct fwd_metadata_t {
 }
 
 struct metadata {
-    int_metadata_t int_metadata;
-    fwd_metadata_t fwd_metadata;
+	ingress_input_metadata_t	bridged_istd;
+    int_metadata_t				int_metadata;
+    fwd_metadata_t 				fwd_metadata;
 }
 
 error {
@@ -134,10 +151,10 @@ error {
 *********************** P A R S E R  ***********************************
 *************************************************************************/
 
-parser MyParser(packet_in packet,
-                out headers hdr,
-                inout metadata meta,
-                inout standard_metadata_t standard_metadata) {
+parser IngressParser(packet_in packet,
+                	out headers hdr,
+                	inout metadata meta,
+                	in psa_ingress_parser_input_metadata_t istd) {
     
     InternetChecksum() ck;                
 
@@ -200,56 +217,24 @@ parser MyParser(packet_in packet,
             hdr.tcp.checksum,
             hdr.tcp.urgentPtr
         });
-        meta.fwd_metadata.checksum_state = ck.get_state();
-
-        transition accept;
+		meta.fwd_metadata.checksum_state = ck.get_state();
+		transition accept;
     }
 }
 
-
-/*************************************************************************
-************   C H E C K S U M    V E R I F I C A T I O N   *************
-*************************************************************************/
-
-control MyVerifyChecksum(inout headers hdr, inout metadata meta) {   
-    apply {  }
-}
-
-
-/*************************************************************************
-**************  I N G R E S S   P R O C E S S I N G   *******************
-*************************************************************************/
-
-control MyIngress(inout headers hdr,
-                  inout metadata meta,
-                  inout standard_metadata_t standard_metadata) {
-
-    action drop() {
-        mark_to_drop(standard_metadata);
-    }
-    
-    action ipv4_forward(macAddr_t dstAddr, egressSpec_t port) {
-        hdr.ipv4.ttl = hdr.ipv4.ttl - 1; 
-    }
-    
-    table ipv4_lpm {
-        key = {
-            hdr.ipv4.dstAddr: lpm;
-        }
-        actions = {
-            ipv4_forward;
-            drop;
-            NoAction;
-        }
-        size = 1024;
-        default_action = NoAction();
-    }
-    
-    apply {
-        if(hdr.ipv4.isValid()){ 
-            ipv4_lpm.apply();
-        }
-    }
+control IngressDeparser(packet_out packet,
+						out metadata normal_meta,
+						inout headers hdr, 
+						in metadata meta,
+						in psa_ingress_output_metadata_t istd) {
+	apply{
+		if(psa_normal(istd)){
+			normal_meta = meta;
+		}
+		packet.emit(hdr.ethernet);
+		packet.emit(hdr.ipv4);
+		packet.emit(hdr.tcp);
+	}						
 }
 
 /*************************************************************************
@@ -259,7 +244,7 @@ control MyIngress(inout headers hdr,
 const bit<6> DSCP_INT = 0x17;
 const bit<6> DSCP_MASK = 0x3F;
 
-control EgressParser(packet_in packet,
+parser EgressParser(packet_in packet,
                 out headers hdr,
                 inout metadata meta,
                 inout standard_metadata_t standard_metadata) {
@@ -333,7 +318,9 @@ control EgressParser(packet_in packet,
 
 control EgressDeparser(packet_out packet,
                        inout headers hdr,
-                       in metadata meta) {
+                       in metadata meta,
+					   in psa_egress_output metadata_t istd,
+					   in psa_egress_deparser_input_metadata_t edstd) {
     InternetChecksum() ck;
     
     apply {
@@ -431,19 +418,110 @@ control EgressDeparser(packet_out packet,
 			});
 			hdr.tcp.checksum = ck.get();
 		}
+
+		if (hdr.level1_port_id.isValid()) {	
+			ck.add({
+				hdr.level1_port_id.ingress_port_id,
+				hdr.level1_port_id.egress_port_id
+			});
+		}
+
+		if (hdr.int_level2_port_ids.isValid()) {
+			ck.add({
+				hdr.level2_port_id.ingress_port_id,
+				hdr.level2_port_id.egress_port_id
+			});
+		}
+		
+		if (hdr.int_egress_port_tx_util.isValid()) {
+			ck.add({ hdr.egress_port_tx_util.egress_port_tx_util});
+		}
+
 		packet.emit(hdr.ethernet);
 		packet.emit(hdr.ipv4);
 		packet.emit(hdr.tcp);
 		packet.emit(hdr.shim);
 		packet.emit(hdr.int_header);
 		packet.emit(hdr.switch_id);
+		packet.emit(hdr.level1_port_id);
 		packet.emit(hdr.hop_delay);
 		packet.emit(hdr.queue);
 		packet.emit(hdr.in_timestamp);
 		packet.emit(hdr.eg_timestamp);
+		packet.emit(hdr.level2_port_id);
+		packet.emit(hdr.egress_port_tx_util);
 	}
 	
-}   
+}
+
+//Bitmask used is 1111110000000000
+control insert_int(inout headers hdr,
+					in int_metadata_t int_metadata,
+					in ingress_input_metadata_t bridged_istd,
+					in psa_egress_input_metadata_t istd){
+	
+	//Set switch id on instruction 0
+	action set_header_0 {
+		hdr.switch_id.setValid();
+		hdr.switch_id.sw_id = int_metadata.switch_id;
+	}
+
+	//Set level 1 ports on instruction 1
+	action set_header_1{
+		hdr.level1_port_id.setValid();
+		hdr.level1_port_id.ingress_port_id = (bit<16>) bridged_istd.ingress_port;
+		hdr.level1_port_id.egress_port_id = (bit<16>) bridged_istd.egress_port;
+	}
+
+	//Set hop delay on instruction 2
+	action set_header_2 {
+		hdr.hop_delay.setValid();
+		hdr.hop_delay.hop_delay = (bit<32>) (istd.egress_timestamp - bridged_istd.ingress_timestamp);
+	}
+
+	//Set queue id and length on instruction 3
+	action set_header_3 {
+		hdr.queue.setValid();
+		hdr.queue.id = 0xFF;
+		hdr.queue.q_length = 0xFFFFFF;
+	}
+
+	//Set Ingress Timestamp on instruction 4
+	action set_header_4 {
+		hdr.in_timestamp.setValid();
+		hdr.in_timestamp.in_timestamp = (bit<32>) bridged_istd.ingress_timestamp; 
+	}
+
+	//Set Egress Timestamp on instruction 5
+	action set_header_5 {
+		hdr.eg_timestamp.setValid();
+		hdr.eg_timestamp.eg_timestamp = (bit<32>) istd.egress_timestamp; 
+	}
+
+	//Action functions below: lead flow according to the INT bitmask (MSB to LSB)
+
+	action set_bits_0003_i0{
+		set_header_3();
+	}
+
+	action set_bits_0003_i1{
+		set_header_2();
+	}
+
+	action set_bits_0003_i2{
+		set_header_1();
+	}
+
+	action set_bits_0003_i3{
+		set_header_0();
+
+	}
+
+	action set_bits_0307_i4{
+		
+	}
+
+}
 
 /*************************************************************************
 *************   C H E C K S U M    C O M P U T A T I O N   **************
