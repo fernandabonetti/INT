@@ -581,9 +581,69 @@ control insert_int(inout headers hdr,
 		set_header_0();
 	}
 
+
+	//Instructions from bit 7 to 4
+	action set_bits_0407_i0 {} 
+	action set_bits_0407_i1 {}
+	action set_bits_0407_i2 {}
+	action set_bits_0407_i3 {}
+
+	action set_bits_0407_i4() {
+		set_header_5();
+	}
+
+	action set_bits_0407_i5() {
+    	set_header_5();
+	}
+
+	action set_bits_0407_i6() {
+		set_header_5();
+	}
+
+    action set_bits_0407_i7() {
+		set_header_5();
+	}
+	
+	action set_bits_0407_i8() {
+		set_header_4();	
+	}
+
+	action set_bits_0407_i9() {
+		set_header_4();
+	}
+
+	action set_bits_0407_i10() {
+		set_header_4();
+	}
+
+	action set_bits_0407_i11() {
+		set_header_4();
+	}
+
+	action set_bits_0407_i12() {
+		set_header_5();
+		set_header_4();
+	}	
+
+	action set_bits_0407_i13() {
+		set_header_5();
+		set_header_4();
+	}
+
+	action set_bits_0407_i14() {
+		set_header_5();
+		set_header_4();
+	}
+
+	action set_bits_0407_i15() {
+		set_header_5();
+		set_header_4();
+	}
+
+
 	table int_bits_0003 {
 		key = {
-			hdr.int_header.instruction_mask_0003 : exact;
+			hdr.int_header.instruction_mask_0407 : exact;
 		}
 		actions = {
 			set_bits_0003_i0();
@@ -605,6 +665,39 @@ control insert_int(inout headers hdr,
 		}
 		default_action = set_bits_0003_i0();
 		size = 16;
+	}
+
+	table int_bits_0407 {
+		key = {
+			hdr.int_header.instruction_mask_0407 : exact;
+		}
+
+		actions = {
+			set_bits_0407_i0();
+			set_bits_0407_i1();
+			set_bits_0407_i2();
+			set_bits_0407_i3();
+			set_bits_0407_i4();
+			set_bits_0407_i5();
+			set_bits_0407_i6();
+			set_bits_0407_i7();
+			set_bits_0407_i8();
+			set_bits_0407_i9();
+			set_bits_0407_i10();
+			set_bits_0407_i11();
+			set_bits_0407_i12();
+			set_bits_0407_i13();
+			set_bits_0407_i14();
+			set_bits_0407_i15();
+		}
+
+		default_action = set_bits_0407_i0();
+		size = 16;
+	}
+
+	apply {
+		int_bits_0003.apply();
+		int_bits_0407.apply();	
 	}
 /*************************************************************************
 *************   C H E C K S U M    C O M P U T A T I O N   **************
@@ -629,7 +722,6 @@ control MyComputeChecksum(inout headers hdr, inout metadata meta) {
             HashAlgorithm.csum16);
     }
 }
-
 
 
 /*************************************************************************
