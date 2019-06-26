@@ -116,7 +116,7 @@ struct headers {
     queue_info          	queue;
     ingress_timestamp   	in_timestamp;
     egress_timestamp    	eg_timestamp;
-	egress_port_tx_util_t egress_port_tx_util;
+	egress_port_tx_util_t   egress_port_tx_util;
 }
 
 //Both types are defined in P4 PSA 
@@ -482,7 +482,7 @@ control insert_int(inout headers hdr,
 	//Set queue id and length on instruction 3
 	action set_header_3 {
 		hdr.queue.setValid();
-		hdr.queue.id = 0xFF;
+		hdr.queue.id = 0xFF; //255
 		hdr.queue.q_length = 0xFFFFFF;
 	}
 
@@ -499,30 +499,113 @@ control insert_int(inout headers hdr,
 	}
 
 	//Action functions below: lead flow according to the INT bitmask (MSB to LSB)
-
+	//Represent each possible combination of bits in the 0-3 bits
 	action set_bits_0003_i0{
-		set_header_3();
-	}
-
-	action set_bits_0003_i1{
-		set_header_2();
-	}
-
-	action set_bits_0003_i2{
-		set_header_1();
-	}
-
-	action set_bits_0003_i3{
-		set_header_0();
-
-	}
-
-	action set_bits_0307_i4{
 		
 	}
 
-}
+	action set_bits_0003_i1{
+		set_header_3();
+	}
 
+	action set_bits_0003_i2{
+		set_header_2();
+	}
+
+	action set_bits_0003_i3{
+		set_header_3();
+		set_header_2();
+	}
+
+	action set_bits_0003_i4() {
+		set_header_1();
+	}
+
+	action set_bits_0003_i5() {
+    	set_header_3();
+    	set_header_1();
+	}
+
+	action set_bits_0003_i6() {
+		set_header_2();
+		set_header_1();
+	}
+
+    action set_bits_0003_i7() {
+		set_header_3();
+		set_header_2();
+		set_header_1();
+	}
+	
+	action set_bits_0003_i8() {
+		set_header_0();	
+	}
+
+	action set_bits_0003_i9() {
+		set_header_3();
+		set_header_0();
+	}
+
+	action set_bits_0003_i10() {
+		set_header_2();
+		set_header_0();
+	}
+
+	action set_bits_0003_i11() {
+		set_header_3();
+		set_header_2();
+		set_header_0();
+	}
+
+	action set_bits_0003_i12() {
+		set_header_1();
+		set_header_0();
+	}	
+
+	action set_bits_0003_i13() {
+		set_header_3();
+		set_header_1();
+		set_header_0();
+	}
+
+	action set_bits_0003_i14() {
+		set_header_2();
+		set_header_1();
+		set_header_0();
+	}
+
+	action set_bits_0003_i15() {
+		set_header_3();
+		set_header_2();
+		set_header_1();
+		set_header_0();
+	}
+
+	table int_bits_0003 {
+		key = {
+			hdr.int_header.instruction_mask_0003 : exact;
+		}
+		actions = {
+			set_bits_0003_i0();
+			set_bits_0003_i1();
+			set_bits_0003_i2();
+			set_bits_0003_i3();
+			set_bits_0003_i4();
+			set_bits_0003_i5();
+			set_bits_0003_i6();
+			set_bits_0003_i7();
+			set_bits_0003_i8();
+			set_bits_0003_i9();
+			set_bits_0003_i10();
+			set_bits_0003_i11();
+			set_bits_0003_i12();
+			set_bits_0003_i13();
+			set_bits_0003_i14();
+			set_bits_0003_i15();
+		}
+		default_action = set_bits_0003_i0();
+		size = 16;
+	}
 /*************************************************************************
 *************   C H E C K S U M    C O M P U T A T I O N   **************
 *************************************************************************/
