@@ -127,7 +127,7 @@ struct ingress_input_metadata_t {
 
 //Switch internal variables
 struct int_metadata_t {
-    bit<16> insert_pos;
+    bit<16> int_byte_count;
     bit<8>  int_hdr_word_len;
     bit<32> switch_id;
 }
@@ -500,9 +500,7 @@ control insert_int(inout headers hdr,
 
 	//Action functions below: lead flow according to the INT bitmask (MSB to LSB)
 	//Represent each possible combination of bits in the 0-3 bits
-	action set_bits_0003_i0{
-		
-	}
+	action set_bits_0003_i0 {}
 
 	action set_bits_0003_i1{
 		set_header_3();
@@ -600,7 +598,7 @@ control insert_int(inout headers hdr,
 		set_header_5();
 	}
 
-    action set_bits_0407_i7() {
+	action set_bits_0407_i7() {
 		set_header_5();
 	}
 	
@@ -699,35 +697,28 @@ control insert_int(inout headers hdr,
 		int_bits_0003.apply();
 		int_bits_0407.apply();	
 	}
-/*************************************************************************
-*************   C H E C K S U M    C O M P U T A T I O N   **************
-*************************************************************************/
-
-control MyComputeChecksum(inout headers hdr, inout metadata meta) {
-     apply {
-	update_checksum(
-	    hdr.ipv4.isValid(), {
-            hdr.ipv4.version,
-	        hdr.ipv4.ihl,
-            hdr.ipv4.diffserv,
-            hdr.ipv4.totalLen,
-            hdr.ipv4.identification,
-            hdr.ipv4.flags,
-            hdr.ipv4.fragOffset,
-            hdr.ipv4.ttl,
-            hdr.ipv4.protocol,
-            hdr.ipv4.srcAddr,
-            hdr.ipv4.dstAddr },
-            hdr.ipv4.hdrChecksum,
-            HashAlgorithm.csum16);
-    }
 }
 
+control update_encapsulation(inout headers hdr,
+							in int_metadata metadata){
+	action update_ipv4(){
+		hdr.ipv4.totalLen = hdr.ipv4.totalLen + metadata.int_byte_count;
+	}							
 
-/*************************************************************************
-***********************  S W I T C H  *******************************
-*************************************************************************/
+	action update_shim(){
+		hdr.shim.len = hdr.shim.len + metadata.int_hdr_word_len;
+	}
 
+	if(hdr.ipv4.isValid()){
+		update_ipv4();
+	}
+
+	if(hdr.shim.isValid()){
+		update_shim();
+	}	
+}
+
+/*
 V1Switch(
 MyParser(),
 MyVerifyChecksum(),
@@ -735,4 +726,4 @@ MyIngress(),
 MyEgress(),
 MyComputeChecksum(),
 MyDeparser()
-) main;
+) main;*/
