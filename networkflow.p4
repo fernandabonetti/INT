@@ -147,10 +147,6 @@ error {
     BadIPv4HeaderChecksum
 }
 
-/*************************************************************************
-*********************** P A R S E R  ***********************************
-*************************************************************************/
-
 parser IngressParser(packet_in packet,
                 	out headers hdr,
                 	inout metadata meta,
@@ -237,10 +233,6 @@ control IngressDeparser(packet_out packet,
 	}						
 }
 
-/*************************************************************************
-****************  E G R E S S   P R O C E S S I N G   *******************
-*************************************************************************/
-
 const bit<6> DSCP_INT = 0x17;
 const bit<6> DSCP_MASK = 0x3F;
 
@@ -311,10 +303,6 @@ parser EgressParser(packet_in packet,
         transition accept;
     }
 }
-
-/*************************************************************************
-***********************  D E P A R S E R  *******************************
-*************************************************************************/
 
 control EgressDeparser(packet_out packet,
                        inout headers hdr,
@@ -695,7 +683,8 @@ control insert_int(inout headers hdr,
 
 	apply {
 		int_bits_0003.apply();
-		int_bits_0407.apply();	
+		int_bits_0407.apply();
+		//int_bits_0815.apply();	
 	}
 }
 
@@ -718,6 +707,98 @@ control update_encapsulation(inout headers hdr,
 	}	
 }
 
+control int_ingress(inout metadata meta,
+					in psa_ingress_parser_input_metadata_t istd) {
+	action bridge_ingress_istd(){
+		meta.bridged_istd.ingress_port = istd.ingress_port;
+		meta.bridged_istd.ingress_timestamp = istd.ingress_timestamp;
+	}	
+
+	apply {
+		bridge_ingress_istd();
+	}				
+}
+
+control int_egress(inout headers hdr,
+					inout metadata meta,
+					in psa_egress_input_metadata_t istd) {
+	
+	//Set up control flags
+	action hop_count_exceeded(){
+		hdr.int_header.e = 1;
+	}					
+
+	action mtu_limit_hit(){
+		hdr.int_header.m = 1;
+	}
+
+	action hop_count_decrement(){
+		hdr.int_header.remaining_hop_cnt = hdr.int_header.remaining_hop_cnt - 1;		 
+	}
+
+	action int_transit(bit <32> switch_id, bit<32> 13_mtu){
+		meta.int_metadata.switch_id = switch_id;
+		meta.int_metadata.int_byte_count = (bit <16>) hdr.int_header.hop_metadata.len << 2;
+		meta.int_metadata.int_hdr_word_len = (bit <8>) hdr.int_header.hop_metadata_len;
+		meta.fwd_metadata.13_mtu = 13_mtu;
+	}
+
+	table preparate_int {
+		key = {}
+		actions = {int_transit;}
+	}
+
+	insert_int() int_metadata_insert;
+	update_encapsulation() int_encap;
+
+	apply {
+		if(hdr.int_header.isValid()){
+			if(hdr.int_header.remaining_hop_cnt == 0 || hdr.int_header.e == 1){
+				hop_count_exceeded();
+				//Skip unsuported bits 8-14
+			} else if((hdr.int_header.instruction_mask_0811 ++ hdr.int_header.instruction_mask_1215) & 8w0xFE == 0) {
+				preparate_int.apply();
+				if(hdr.ipv4.totalLen + meta.int_metadata.int_byte_count > meta.fwd_metadata.13_mtu){
+					mtu_limit_hit();
+				}else{
+					hop_count_decrement();
+					int_metadata.insert.apply(hdr, meta.int_metadata,
+											meta.bridged_istd, istd);
+					int_encap.apply(hdr, meta.int_metadata);
+				}
+			}
+		}
+	}
+}
+
+control ingress(inout headers hdr,
+				inout metadata meta,
+				in psa_ingress_parser_input_metadata_t istd,
+				inout psa_ingress_output_metadata_t ostd){
+	int_ingress() int_ingress;
+	apply {
+		int_ingress.apply(meta, istd);
+	}				
+}
+
+control egress(inout headers hdr,
+			inout metadata meta,
+			in psa_egress_input_metadata_t istd,
+			inout psa_egress_output_metadata_t ostd){
+	int_egress() int_egress;
+	apply{
+		int_egress.apply(hdr, meta, istd);
+	}			
+}
+
+IngressPipeline(IngressParser(),
+				ingress(),
+				IngressDeparser()) ip;
+EgressPipeline(EgressParser(),
+				egress(),
+				EgressDeparser()) ep;
+
+PSA_SWITCH(ip, ep) main;
 /*
 V1Switch(
 MyParser(),
