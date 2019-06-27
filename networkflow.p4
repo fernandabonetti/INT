@@ -6,7 +6,6 @@ const bit<16> TYPE_IPV4 = 0x800;
 
 #define MAX_HOPS 9
 
-
 header ethernet_t {
     bit<48> dstAddr;
     bit<48> srcAddr;
@@ -799,12 +798,3 @@ EgressPipeline(EgressParser(),
 				EgressDeparser()) ep;
 
 PSA_SWITCH(ip, ep) main;
-/*
-V1Switch(
-MyParser(),
-MyVerifyChecksum(),
-MyIngress(),
-MyEgress(),
-MyComputeChecksum(),
-MyDeparser()
-) main;*/
