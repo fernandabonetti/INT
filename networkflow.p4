@@ -3,8 +3,10 @@
 #include <v1model.p4>
 
 const bit<16> TYPE_IPV4 = 0x800;
-
-#define MAX_HOPS 9
+const bit<16> TYPE_INT = 0x1212;
+typedef bit<9>  egressSpec_t;
+typedef bit<32> switchID_t;
+typedef bit<32> qdepth_t;
 
 header ethernet_t {
     bit<48> dstAddr;
@@ -28,118 +30,24 @@ header ipv4_t {
     bit<32> dstAddr;
 }
 
-header tcp_hdr {
-    bit<16> srcAddr;
-    bit<16> dstAddr;
-    bit<32> seqNumber;
-    bit<32> ackNumber;
-    bit<4>  dataOffset;
-    bit<4>  res;
-    bit<8>  flags;
-    bit<16> window;
-    bit<16> checksum;
-    bit<16> urgentPtr;
-}
-
-header shim_t {
-    bit<8> int_type;
-    bit<8> rsvd1;
-    bit<8> len;
-    bit<6> dscp;
-    bit<2> rsvd2
-}
-
-header int_header_t {
-    bit<4> ver;
-    bit<2> rep;
-    bit<1> c;
-    bit<1> e;
-    bit<1> m;
-    bit<7> rsvd1;
-    bit<3> rsvd2;
-    bit<5> hop_metadata_len;
-    bit<8> remaining_hop_cnt;
-    bit<4> instruction_mask_0003;
-    bit<4> instruction_mask_0407;
-    bit<4> instruction_mask_0811;
-    bit<4> instruction_mask_1215;
-    bit<16> rsvd3;
-}
-
-header switch_id_t {
+//155 bits
+header int_switch_t {	
 	bit<32> sw_id;
-}
-
-header level1_port_id_t {
-	bit<16> ingress_port_id;
-	bit<16> egress_port_id;
-}
-
-header level2_port_id_t {
-	bit<16> ingress_port_id;
-	bit<16> egress_port_id;
-}
-
-header ingress_timestamp {
-	bit<32> in_timestamp;
-}
-
-header egress_timestamp {
-	bit<32> eg_timestamp;
-}
-
-header queue_info {
-	bit<8>  id;
-	bit<24> q_length;    
-}
-
-header hop_delay_t {
+	bit<32> protocol;
+	bit<32> queue_id;
+	bit<32> queue_length;
+	bit<32> ingress_timestamp;
 	bit<32> hop_delay;
 }
 
-//TX utilization of egress port
-header egress_port_tx_util_t {
-	bit<32> egress_port_tx_util;
-}
-
 struct headers {
-    ethernet_t          	ethernet;
-    ipv4_t              	ipv4;
-    tcp_hdr             	tcp;
-    shim_t              	shim;
-    int_header_t        	int_header;
-    switch_id_t         	switch_id;
-	level1_port_id_t		level1_port_id;
-	level2_port_id_t		level2_port_id;
-    hop_delay_t         	hop_delay;
-    queue_info          	queue;
-    ingress_timestamp   	in_timestamp;
-    egress_timestamp    	eg_timestamp;
-	egress_port_tx_util_t   egress_port_tx_util;
-}
-
-//Both types are defined in P4 PSA 
-struct ingress_input_metadata_t {
-	PortId_t 	ingress_port;
-	Timestamp_t ingress_timestamp;
-}
-
-//Switch internal variables
-struct int_metadata_t {
-    bit<16> int_byte_count;
-    bit<8>  int_hdr_word_len;
-    bit<32> switch_id;
-}
-
-struct fwd_metadata_t {
-    bit<16> 13_mtu;
-    bit<16> checksum_state;
+	ethernet_t		ethernet;
+	int_switch_t	int_header;
+	ipv4_t			ipv4;
 }
 
 struct metadata {
-	ingress_input_metadata_t	bridged_istd;
-    int_metadata_t				int_metadata;
-    fwd_metadata_t 				fwd_metadata;
+
 }
 
 error {
@@ -147,654 +55,155 @@ error {
 }
 
 parser IngressParser(packet_in packet,
-                	out headers hdr,
-                	inout metadata meta,
-                	in psa_ingress_parser_input_metadata_t istd) {
-    
-    InternetChecksum() ck;                
+				out headers hdr,
+				inout metadata meta,
+				inout standard_metadata_t standard_metadata) {
 
     state start {
-        transition parse_ethernet;    
+        transition parse_ethernet;
     }
 
     state parse_ethernet {
         packet.extract(hdr.ethernet);
-        transition select(hdr.ethernet.etherType){
-            TYPE_IPV4 : parse_ipv4;
-            default accept;
-        }
-    }
-
-    state parse_ipv4 {
-        packet.extract(hdr.ipv4);
-
-        ck.clear();
-        ck.add({
-                hdr.ipv4.version,
-                hdr.ipv4.ihl, 
-                hdr.ipv4.dscp, 
-                hdr.ipv4.ecn,
-                hdr.ipv4.totalLen,
-                hdr.ipv4.identification,
-                hdr.ipv4.flags, 
-                hdr.ipv4.fragOffset,
-                hdr.ipv4.ttl, 
-                hdr.ipv4.protocol,
-                hdr.ipv4.srcAddr,
-                hdr.ipv4.dstAddr
-        });
-
-        verify(hdr.ipv4.hdrChecksum == ck.get(), error.BadIPv4HeaderChecksum);
-        ck.clear();
-
-        ck.subtract({
-            hdr.ipv4.srcAddr,
-            hdr.ipv4.dstAddr,
-            hdr.ipv4.totalLen
-        });
-
-        transition select(hdr.ipv4.protocol) {
-            6       : parse_tcp;
-            default : accept;
-        }
-    }
-
-    state parse_tcp {
-        packet.extract(hdr.tcp);
-        ck.subtract({
-            hdr.tcp.srcPort,
-            hdr.tcp.dstPort,
-            hdr.tcp.seqNo,
-            hdr.tcp.ackNo,
-            hdr.tcp.dataOffset, hdr.tcp.res,
-            hdr.tcp.flags,
-            hdr.tcp.window,
-            hdr.tcp.checksum,
-            hdr.tcp.urgentPtr
-        });
-		meta.fwd_metadata.checksum_state = ck.get_state();
-		transition accept;
-    }
-}
-
-control IngressDeparser(packet_out packet,
-						out metadata normal_meta,
-						inout headers hdr, 
-						in metadata meta,
-						in psa_ingress_output_metadata_t istd) {
-	apply{
-		if(psa_normal(istd)){
-			normal_meta = meta;
-		}
-		packet.emit(hdr.ethernet);
-		packet.emit(hdr.ipv4);
-		packet.emit(hdr.tcp);
-	}						
-}
-
-const bit<6> DSCP_INT = 0x17;
-const bit<6> DSCP_MASK = 0x3F;
-
-parser EgressParser(packet_in packet,
-                out headers hdr,
-                inout metadata meta,
-                inout standard_metadata_t standard_metadata) {
-    InternetChecksum() ck;                
-    
-    state start{
-        transition parse_ethernet;
-    }
-
-    state parse_ethernet{
-        packet.extract(hdr.ethernet);
         transition select(hdr.ethernet.etherType) {
-            TYPE_IPV4 : parse_ipv4;
-            default   : accept;
+            TYPE_INT: parse_Int;
+            TYPE_IPV4: parse_ipv4;
+            default: accept;
+        }
+    }
+
+    state parse_Int {
+        packet.extract(hdr.int_header);
+        transition select(hdr.int_header.protocol) {
+            TYPE_IPV4: parse_ipv4;
+            default: accept;
         }
     }
 
     state parse_ipv4 {
         packet.extract(hdr.ipv4);
-        transition select(hdr.ipv4.protocol) {
-            6       : parse_tcp;
-            default : accept;
-        }
-    }
-
-    state parse_tcp {
-        packet.extract(hdr.tcp);
-        transition select(hdr.ipv4.dscp) {
-        DSCP_INT &&& DSCP_MASK: parse_shim;
-        default: accept;
-    }
-
-    state parse_shim {
-        packet.extract(hdr.shim);
-        ck.subtract({
-            hdr.shim.int_type,
-            hdr.shim.rsvd1,
-            hdr.shim.len,
-            hdr.shim.dscp,
-            hdr.shim.rsvd2
-        });
-        transition parse_int_header;
-    }
-
-    state parse_int_header {
-        packet.extract(hdr.int_header);
-        ck.subtract({
-            hdr.int_header.ver, 
-            hdr.int_header.rep,
-            hdr.int_header.c, 
-            hdr.int_header.e,
-            hdr.int_header.m, 
-            hdr.int_header.rsvd1,
-            hdr.int_header.rsvd2, 
-            hdr.int_header.hop_metadata_len,
-            hdr.int_header.remaining_hop_cnt,
-            hdr.int_header.instruction_mask_0003,
-            hdr.int_header.instruction_mask_0407,
-            hdr.int_header.instruction_mask_0811,
-            hdr.int_header.instruction_mask_1215,
-            hdr.int_header.rsvd3
-        });
-        meta.fwd_metadata.checksum_state = ck.get_state();
         transition accept;
     }
 }
 
-control EgressDeparser(packet_out packet,
-                       inout headers hdr,
-                       in metadata meta,
-					   in psa_egress_output metadata_t istd,
-					   in psa_egress_deparser_input_metadata_t edstd) {
-    InternetChecksum() ck;
+control VerifyChecksum(inout headers hdr, inout metadata meta) {   
+    apply {  }
+}
+
+control Ingress(inout headers hdr,
+				inout metadata meta,
+				inout standard_metadata_t standard_metadata) {
+    action drop() {
+        mark_to_drop(standard_metadata);
+    }
     
+    action ipv4_forward(macAddr_t dstAddr, egressSpec_t port) {
+        standard_metadata.egress_spec = port;
+        hdr.ethernet.srcAddr = hdr.ethernet.dstAddr;
+        hdr.ethernet.dstAddr = dstAddr;
+        hdr.ipv4.ttl = hdr.ipv4.ttl - 1;
+    }
+    
+    table ipv4_lpm {
+        key = {
+            hdr.ipv4.dstAddr: lpm;
+        }
+        actions = {
+            ipv4_forward;
+            drop;
+            NoAction;
+        }
+        size = 1024;
+        default_action = drop();
+    }
+    
+    action int_ingress(egressSpec_t port, switchID_t swid) {
+		hdr.int_header.sw_id = swid;   //Add switch id to header
+        standard_metadata.egress_spec = port;
+    }
+
+    table int_exact {
+        actions = {
+            int_ingress;
+            drop;
+        }
+        size = 1024;
+        default_action = drop();
+    }
+
     apply {
-        if (hdr.ipv4.isValid()) {
-            ck.clear();
-            ck.add({
-                hdr.ipv4.version, 
-                hdr.ipv4.ihl, 
-                hdr.ipv4.dscp, 
-                hdr.ipv4.ecn,
-                hdr.ipv4.totalLen,
-                hdr.ipv4.identification,
-                hdr.ipv4.flags, 
-                hdr.ipv4.fragOffset,
-                hdr.ipv4.ttl, 
-                hdr.ipv4.protocol,
-                hdr.ipv4.srcAddr,
-                hdr.ipv4.dstAddr
-            });
-            hdr.ipv4.hdrChecksum = ck.get();
-        }
-    
-        ck.set_state(meta.fwd_metadata.checksum_state);
-
-        if (hdr.ipv4.isValid()) {
-            ck.add({
-                hdr.ipv4.srcAddr,
-                hdr.ipv4.dstAddr,
-                hdr.ipv4.totalLen
-            });
-        }
-
-        if (hdr.shim.isValid()) {
-            ck.add({
-                hdr.shim.int_type,
-                hdr.shim.rsvd1,
-                hdr.shim.len,
-                hdr.shim.dscp,
-                hdr.shim.rsvd2
-            });
+        if (hdr.ipv4.isValid() && !hdr.int_header.isValid()) {
+            ipv4_lpm.apply();
         }
 
         if (hdr.int_header.isValid()) {
-            ck.add({
-                hdr.int_header.ver,
-                hdr.int_header.rep,
-                hdr.int_header.c, 
-                hdr.int_header.e,
-                hdr.int_header.m, 
-                hdr.int_header.rsvd1,
-                hdr.int_header.rsvd2, 
-                hdr.int_header.hop_metadata_len,
-                hdr.int_header.remaining_hop_cnt,
-                hdr.int_header.instruction_mask_0003,
-                hdr.int_header.instruction_mask_0407,
-                hdr.int_header.instruction_mask_0811,
-                hdr.int_header.instruction_mask_1215,
-                hdr.int_header.rsvd3
-            });
+            int_ingress_exact.apply();
         }
-
-        if (hdr.switch_id.isValid()) {
-            ck.add({hdr.switch_id.sw_id});
-        }
-
-        if (hdr.hop_delay.isValid()) {
-            ck.add({hdr.hop_delay.hop_delay});
-        }
-
-		if (hdr.queue.isValid()) {
-			ck.add({
-				hdr.queue.id,
-				hdr.queue.q_length
-			});
-		}
-
-		if (hdr.in_timestamp.isValid()) {
-			ck.add({hdr.in_timestamp.in_timestamp});
-		}
-
-		if (hdr.eg_timestamp.isValid()) {
-			ck.add({hdr.eg_timestamp.eg_timestamp});
-		}
-
-		if (hdr.tcp.isValid()) {
-			ck.add({
-				hdr.tcp.srcPort,
-				hdr.tcp.dstPort,
-				hdr.tcp.seqNo,
-				hdr.tcp.ackNo,
-				hdr.tcp.dataOffset, hdr.tcp.res,
-				hdr.tcp.flags,
-				hdr.tcp.window,
-				hdr.tcp.urgentPtr
-			});
-			hdr.tcp.checksum = ck.get();
-		}
-
-		if (hdr.level1_port_id.isValid()) {	
-			ck.add({
-				hdr.level1_port_id.ingress_port_id,
-				hdr.level1_port_id.egress_port_id
-			});
-		}
-
-		if (hdr.int_level2_port_ids.isValid()) {
-			ck.add({
-				hdr.level2_port_id.ingress_port_id,
-				hdr.level2_port_id.egress_port_id
-			});
-		}
-		
-		if (hdr.int_egress_port_tx_util.isValid()) {
-			ck.add({ hdr.egress_port_tx_util.egress_port_tx_util});
-		}
-
-		packet.emit(hdr.ethernet);
-		packet.emit(hdr.ipv4);
-		packet.emit(hdr.tcp);
-		packet.emit(hdr.shim);
-		packet.emit(hdr.int_header);
-		packet.emit(hdr.switch_id);
-		packet.emit(hdr.level1_port_id);
-		packet.emit(hdr.hop_delay);
-		packet.emit(hdr.queue);
-		packet.emit(hdr.in_timestamp);
-		packet.emit(hdr.eg_timestamp);
-		packet.emit(hdr.level2_port_id);
-		packet.emit(hdr.egress_port_tx_util);
-	}
-	
+    }
 }
 
-//Bitmask used is 1111110000000000
-control insert_int(inout headers hdr,
-					in int_metadata_t int_metadata,
-					in ingress_input_metadata_t bridged_istd,
-					in psa_egress_input_metadata_t istd){
-	
-	//Set switch id on instruction 0
-	action set_header_0 {
-		hdr.switch_id.setValid();
-		hdr.switch_id.sw_id = int_metadata.switch_id;
-	}
-
-	//Set level 1 ports on instruction 1
-	action set_header_1{
-		hdr.level1_port_id.setValid();
-		hdr.level1_port_id.ingress_port_id = (bit<16>) bridged_istd.ingress_port;
-		hdr.level1_port_id.egress_port_id = (bit<16>) bridged_istd.egress_port;
-	}
-
-	//Set hop delay on instruction 2
-	action set_header_2 {
-		hdr.hop_delay.setValid();
-		hdr.hop_delay.hop_delay = (bit<32>) (istd.egress_timestamp - bridged_istd.ingress_timestamp);
-	}
-
-	//Set queue id and length on instruction 3
-	action set_header_3 {
-		hdr.queue.setValid();
-		hdr.queue.id = 0xFF; //255
-		hdr.queue.q_length = 0xFFFFFF;
-	}
-
-	//Set Ingress Timestamp on instruction 4
-	action set_header_4 {
-		hdr.in_timestamp.setValid();
-		hdr.in_timestamp.in_timestamp = (bit<32>) bridged_istd.ingress_timestamp; 
-	}
-
-	//Set Egress Timestamp on instruction 5
-	action set_header_5 {
-		hdr.eg_timestamp.setValid();
-		hdr.eg_timestamp.eg_timestamp = (bit<32>) istd.egress_timestamp; 
-	}
-
-	//Action functions below: lead flow according to the INT bitmask (MSB to LSB)
-	//Represent each possible combination of bits in the 0-3 bits
-	action set_bits_0003_i0 {}
-
-	action set_bits_0003_i1{
-		set_header_3();
-	}
-
-	action set_bits_0003_i2{
-		set_header_2();
-	}
-
-	action set_bits_0003_i3{
-		set_header_3();
-		set_header_2();
-	}
-
-	action set_bits_0003_i4() {
-		set_header_1();
-	}
-
-	action set_bits_0003_i5() {
-    	set_header_3();
-    	set_header_1();
-	}
-
-	action set_bits_0003_i6() {
-		set_header_2();
-		set_header_1();
-	}
-
-    action set_bits_0003_i7() {
-		set_header_3();
-		set_header_2();
-		set_header_1();
-	}
-	
-	action set_bits_0003_i8() {
-		set_header_0();	
-	}
-
-	action set_bits_0003_i9() {
-		set_header_3();
-		set_header_0();
-	}
-
-	action set_bits_0003_i10() {
-		set_header_2();
-		set_header_0();
-	}
-
-	action set_bits_0003_i11() {
-		set_header_3();
-		set_header_2();
-		set_header_0();
-	}
-
-	action set_bits_0003_i12() {
-		set_header_1();
-		set_header_0();
-	}	
-
-	action set_bits_0003_i13() {
-		set_header_3();
-		set_header_1();
-		set_header_0();
-	}
-
-	action set_bits_0003_i14() {
-		set_header_2();
-		set_header_1();
-		set_header_0();
-	}
-
-	action set_bits_0003_i15() {
-		set_header_3();
-		set_header_2();
-		set_header_1();
-		set_header_0();
-	}
-
-
-	//Instructions from bit 7 to 4
-	action set_bits_0407_i0 {} 
-	action set_bits_0407_i1 {}
-	action set_bits_0407_i2 {}
-	action set_bits_0407_i3 {}
-
-	action set_bits_0407_i4() {
-		set_header_5();
-	}
-
-	action set_bits_0407_i5() {
-    	set_header_5();
-	}
-
-	action set_bits_0407_i6() {
-		set_header_5();
-	}
-
-	action set_bits_0407_i7() {
-		set_header_5();
-	}
-	
-	action set_bits_0407_i8() {
-		set_header_4();	
-	}
-
-	action set_bits_0407_i9() {
-		set_header_4();
-	}
-
-	action set_bits_0407_i10() {
-		set_header_4();
-	}
-
-	action set_bits_0407_i11() {
-		set_header_4();
-	}
-
-	action set_bits_0407_i12() {
-		set_header_5();
-		set_header_4();
-	}	
-
-	action set_bits_0407_i13() {
-		set_header_5();
-		set_header_4();
-	}
-
-	action set_bits_0407_i14() {
-		set_header_5();
-		set_header_4();
-	}
-
-	action set_bits_0407_i15() {
-		set_header_5();
-		set_header_4();
-	}
-
-
-	table int_bits_0003 {
-		key = {
-			hdr.int_header.instruction_mask_0407 : exact;
-		}
-		actions = {
-			set_bits_0003_i0();
-			set_bits_0003_i1();
-			set_bits_0003_i2();
-			set_bits_0003_i3();
-			set_bits_0003_i4();
-			set_bits_0003_i5();
-			set_bits_0003_i6();
-			set_bits_0003_i7();
-			set_bits_0003_i8();
-			set_bits_0003_i9();
-			set_bits_0003_i10();
-			set_bits_0003_i11();
-			set_bits_0003_i12();
-			set_bits_0003_i13();
-			set_bits_0003_i14();
-			set_bits_0003_i15();
-		}
-		default_action = set_bits_0003_i0();
-		size = 16;
-	}
-
-	table int_bits_0407 {
-		key = {
-			hdr.int_header.instruction_mask_0407 : exact;
-		}
-
-		actions = {
-			set_bits_0407_i0();
-			set_bits_0407_i1();
-			set_bits_0407_i2();
-			set_bits_0407_i3();
-			set_bits_0407_i4();
-			set_bits_0407_i5();
-			set_bits_0407_i6();
-			set_bits_0407_i7();
-			set_bits_0407_i8();
-			set_bits_0407_i9();
-			set_bits_0407_i10();
-			set_bits_0407_i11();
-			set_bits_0407_i12();
-			set_bits_0407_i13();
-			set_bits_0407_i14();
-			set_bits_0407_i15();
-		}
-
-		default_action = set_bits_0407_i0();
-		size = 16;
-	}
-
-	apply {
-		int_bits_0003.apply();
-		int_bits_0407.apply();
-		//int_bits_0815.apply();	
-	}
-}
-
-control update_encapsulation(inout headers hdr,
-							in int_metadata metadata){
-	action update_ipv4(){
-		hdr.ipv4.totalLen = hdr.ipv4.totalLen + metadata.int_byte_count;
-	}							
-
-	action update_shim(){
-		hdr.shim.len = hdr.shim.len + metadata.int_hdr_word_len;
-	}
-
-	if(hdr.ipv4.isValid()){
-		update_ipv4();
-	}
-
-	if(hdr.shim.isValid()){
-		update_shim();
-	}	
-}
-
-control int_ingress(inout metadata meta,
-					in psa_ingress_parser_input_metadata_t istd) {
-	action bridge_ingress_istd(){
-		meta.bridged_istd.ingress_port = istd.ingress_port;
-		meta.bridged_istd.ingress_timestamp = istd.ingress_timestamp;
-	}	
-
-	apply {
-		bridge_ingress_istd();
-	}				
-}
-
-control int_egress(inout headers hdr,
-					inout metadata meta,
-					in psa_egress_input_metadata_t istd) {
-	
-	//Set up control flags
-	action hop_count_exceeded(){
-		hdr.int_header.e = 1;
-	}					
-
-	action mtu_limit_hit(){
-		hdr.int_header.m = 1;
-	}
-
-	action hop_count_decrement(){
-		hdr.int_header.remaining_hop_cnt = hdr.int_header.remaining_hop_cnt - 1;		 
-	}
-
-	action int_transit(bit <32> switch_id, bit<32> 13_mtu){
-		meta.int_metadata.switch_id = switch_id;
-		meta.int_metadata.int_byte_count = (bit <16>) hdr.int_header.hop_metadata.len << 2;
-		meta.int_metadata.int_hdr_word_len = (bit <8>) hdr.int_header.hop_metadata_len;
-		meta.fwd_metadata.13_mtu = 13_mtu;
-	}
-
-	table preparate_int {
-		key = {}
-		actions = {int_transit;}
-	}
-
-	insert_int() int_metadata_insert;
-	update_encapsulation() int_encap;
-
-	apply {
-		if(hdr.int_header.isValid()){
-			if(hdr.int_header.remaining_hop_cnt == 0 || hdr.int_header.e == 1){
-				hop_count_exceeded();
-				//Skip unsuported bits 8-14
-			} else if((hdr.int_header.instruction_mask_0811 ++ hdr.int_header.instruction_mask_1215) & 8w0xFE == 0) {
-				preparate_int.apply();
-				if(hdr.ipv4.totalLen + meta.int_metadata.int_byte_count > meta.fwd_metadata.13_mtu){
-					mtu_limit_hit();
-				}else{
-					hop_count_decrement();
-					int_metadata.insert.apply(hdr, meta.int_metadata,
-											meta.bridged_istd, istd);
-					int_encap.apply(hdr, meta.int_metadata);
-				}
-			}
-		}
-	}
-}
-
-control ingress(inout headers hdr,
-				inout metadata meta,
-				in psa_ingress_parser_input_metadata_t istd,
-				inout psa_ingress_output_metadata_t ostd){
-	int_ingress() int_ingress;
-	apply {
-		int_ingress.apply(meta, istd);
-	}				
-}
-
-control egress(inout headers hdr,
+control Egress(inout headers hdr,
 			inout metadata meta,
-			in psa_egress_input_metadata_t istd,
-			inout psa_egress_output_metadata_t ostd){
-	int_egress() int_egress;
-	apply{
-		int_egress.apply(hdr, meta, istd);
+			inout standard_metadata_t standard_metadata) {
+
+
+	action update_timestamps(){
+		hdr.int_header.ingress_timestamp = (bit<32>) standard_metadata.enq_timestamp;
+		hdr.int_ingress.hop_delay = (bit <32>) standard_metadata.deq_timedelta;
+	}
+
+	action update_queue{
+		//hdr.int_header.queue_id = 
+		hdr.int_header.queue_length = (bit<32>) standard_metadata.deq_qdepth;
 	}			
+
+	table update_int {
+		actions = {
+			update_timestamps();
+			update_queue();
+		}
+		default_action = NoAction;
+	}			
+
+    apply {
+		if(hdr.int_header.isValid()){
+			update_int.apply();
+		}
+	  }
 }
 
-IngressPipeline(IngressParser(),
-				ingress(),
-				IngressDeparser()) ip;
-EgressPipeline(EgressParser(),
-				egress(),
-				EgressDeparser()) ep;
+control ComputeChecksum(inout headers  hdr, inout metadata meta) {
+     apply {
+	update_checksum(
+	    hdr.ipv4.isValid(),
+            { hdr.ipv4.version,
+	      	  hdr.ipv4.ihl,
+              hdr.ipv4.diffserv,
+              hdr.ipv4.totalLen,
+              hdr.ipv4.identification,
+              hdr.ipv4.flags,
+              hdr.ipv4.fragOffset,
+              hdr.ipv4.ttl,
+              hdr.ipv4.protocol,
+              hdr.ipv4.srcAddr,
+              hdr.ipv4.dstAddr },
+            hdr.ipv4.hdrChecksum,
+            HashAlgorithm.csum16);
+    }
+}
 
-PSA_SWITCH(ip, ep) main;
+control Deparser(packet_out packet, in headers hdr) {
+    apply {
+        packet.emit(hdr.ethernet);
+        packet.emit(hdr.int_header);
+        packet.emit(hdr.ipv4);
+    }
+}
+V1Switch(
+IngressParser(),
+VerifyChecksum(),
+Ingress(),
+Egress(),
+ComputeChecksum(),
+Deparser()
+) main;
