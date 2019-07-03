@@ -8,22 +8,13 @@ from scapy.packet import Packet, bind_layers
 class INT(Packet):
     name = "INT" 
     fields_desc = [
-        BitField("version", 4, 1),
-        BitField("rep", 0, 2),
-        BitField("c", 0, 1),
-        BitField("e", 0, 1),
-        BitField("m", 0, 1)
-        BitField("rsvd1", 0, 5)
-        BitField("rsvd2", 0,  5)
-        BitField("hop_len", 2, 5)
-        ByteField("rem_hop_cnt", 6)
-        "int_mask_0003"
-        "int_mask_0407"
-        "int_mask_0811"
-        "int_mask_1215"
-        "reserved"
-        "switchid"
-        "queue" ] 
+        BitField("swid", 0, 32),
+        BitField("protocol", 0, 16),
+        BitField("queue_id", 0, 1),
+        BitField("queue_length", 100, 32),
+        BitField("in_timestamp", 0, 32),
+        BitField("hop_delay", 0, 32)
+    ]
 
 def main():
     if len(sys.argv) < 3:

@@ -2,8 +2,12 @@
 #include <core.p4>
 #include <v1model.p4>
 
+#define CPU_SESSION 250
+
+const   bit<32> CLONE = 2;
 const   bit<16> TYPE_IPV4 = 0x800;
 const   bit<16> TYPE_INT = 0x1212;
+
 typedef bit<9>  egressSpec_t;
 typedef bit<32> switchID_t;
 typedef bit<32> qdepth_t;
@@ -49,6 +53,7 @@ struct headers {
 
 //Copy Metadata to clone
 struct metadata {
+    bit<32> mirroring_type;
     bit<32> sw_id;
 	bit<16> protocol;
 	bit<32> queue_id;
@@ -126,6 +131,7 @@ control MyIngress(inout headers hdr,
     action int_ingress(egressSpec_t port, switchID_t swid) {
 		hdr.int_header.sw_id = swid;   //Add switch id to header
         standard_metadata.egress_spec = port;
+		meta.sw_id = hdr.int_header.sw_id;
     }
 
     table int_exact {
@@ -156,11 +162,15 @@ control MyEgress(inout headers hdr,
 	action update_timestamps(){
 		hdr.int_header.ingress_timestamp = (bit<32>) standard_metadata.enq_timestamp;
 		hdr.int_ingress.hop_delay = (bit <32>) standard_metadata.deq_timedelta;
+		meta.ingress_timestamp = hdr.int_header.ingress_timestamp;
+		meta.hop_delay = hdr.int_ingress.hop_delay;
 	}
 
 	action update_queue(){
 		//hdr.int_header.queue_id = 
 		hdr.int_header.queue_length = (bit<32>) standard_metadata.deq_qdepth;
+		meta.queue_length = hdr.int_header.queue_length;
+		meta.mirroring_type = CLONE;
 	}			
 
 	table update_int {
@@ -174,6 +184,9 @@ control MyEgress(inout headers hdr,
 		if(hdr.int_header.isValid()){
 			update_int.apply();
 		}
+        if(meta.mirroring_type == CLONE){
+        	clone3(CloneType.E2E, CPU_SESSION, {meta});
+        }
 	  }
 }
 
