@@ -2,8 +2,8 @@
 #include <core.p4>
 #include <v1model.p4>
 
-const bit<16> TYPE_IPV4 = 0x800;
-const bit<16> TYPE_INT = 0x1212;
+const   bit<16> TYPE_IPV4 = 0x800;
+const   bit<16> TYPE_INT = 0x1212;
 typedef bit<9>  egressSpec_t;
 typedef bit<32> switchID_t;
 typedef bit<32> qdepth_t;
@@ -34,7 +34,7 @@ header ipv4_t {
 //155 bits
 header int_switch_t {	
 	bit<32> sw_id;
-	bit<32> protocol;
+	bit<16> protocol;
 	bit<32> queue_id;
 	bit<32> queue_length;
 	bit<32> ingress_timestamp;
@@ -47,8 +47,14 @@ struct headers {
 	ipv4_t			ipv4;
 }
 
+//Copy Metadata to clone
 struct metadata {
-
+    bit<32> sw_id;
+	bit<16> protocol;
+	bit<32> queue_id;
+	bit<32> queue_length;
+	bit<32> ingress_timestamp;
+	bit<32> hop_delay;
 }
 
 error {
@@ -112,7 +118,6 @@ control MyIngress(inout headers hdr,
         actions = {
             ipv4_forward;
             drop;
-            NoAction;
         }
         size = 1024;
         default_action = drop();
@@ -128,7 +133,7 @@ control MyIngress(inout headers hdr,
             int_ingress;
             drop;
         }
-        size = 1024;
+        //size = 1024;
         default_action = drop();
     }
 
@@ -138,7 +143,7 @@ control MyIngress(inout headers hdr,
         }
 
         if (hdr.int_header.isValid()) {
-            int_ingress_exact.apply();
+            int_exact.apply();
         }
     }
 }
@@ -163,7 +168,6 @@ control MyEgress(inout headers hdr,
 			update_timestamps();
 			update_queue();
 		}
-		default_action = NoAction;
 	}			
 
     apply {
