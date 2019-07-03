@@ -1,0 +1,50 @@
+{
+    "target": "bmv2",
+    "p4info": "build/networkflow.p4.p4info.txt",
+    "bmv2_json": "build/networkflow.json",
+    "table_entries": [
+      {
+        "table": "Egress.update_int",
+        "default_action": true,
+        "action_name": "Egress.update_timestamps"
+      },
+      {
+        "table": "Egress.update_int",
+        "default_action": true,
+        "action_name": "Egress.update_queue"
+      },
+      {
+        "table": "Ingress.ipv4_lpm",
+        "match": {
+          "hdr.ipv4.dstAddr": ["10.0.1.1", 32]
+        },
+        "action_name": "Ingress.ipv4_forward",
+        "action_params": {
+          "dstAddr": "00:00:00:00:01:01",
+          "port": 1
+        }
+      },
+      {
+        "table": "Ingress.ipv4_lpm",
+        "match": {
+          "hdr.ipv4.dstAddr": ["10.0.3.0", 24]
+        },
+        "action_name": "Ingress.ipv4_forward",
+        "action_params": {
+          "dstAddr": "00:00:00:03:00:00",
+          "port": 3
+        }
+      },
+      {
+        "table": "Ingress.ipv4_lpm",
+        "match": {
+          "hdr.ipv4.dstAddr": ["10.0.2.0", 24]
+        },
+        "action_name": "MyIngress.ipv4_forward",
+        "action_params": {
+          "dstAddr": "00:00:00:03:00:00",
+          "port": 2
+        }
+      }
+    ]
+  }
