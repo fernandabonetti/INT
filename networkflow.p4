@@ -7,6 +7,7 @@ const bit<16> TYPE_INT = 0x1212;
 typedef bit<9>  egressSpec_t;
 typedef bit<32> switchID_t;
 typedef bit<32> qdepth_t;
+typedef bit<48> macAddr_t;
 
 header ethernet_t {
     bit<48> dstAddr;
@@ -86,11 +87,11 @@ parser IngressParser(packet_in packet,
     }
 }
 
-control VerifyChecksum(inout headers hdr, inout metadata meta) {   
+control MyVerifyChecksum(inout headers hdr, inout metadata meta) {   
     apply {  }
 }
 
-control Ingress(inout headers hdr,
+control MyIngress(inout headers hdr,
 				inout metadata meta,
 				inout standard_metadata_t standard_metadata) {
     action drop() {
@@ -142,7 +143,7 @@ control Ingress(inout headers hdr,
     }
 }
 
-control Egress(inout headers hdr,
+control MyEgress(inout headers hdr,
 			inout metadata meta,
 			inout standard_metadata_t standard_metadata) {
 
@@ -152,7 +153,7 @@ control Egress(inout headers hdr,
 		hdr.int_ingress.hop_delay = (bit <32>) standard_metadata.deq_timedelta;
 	}
 
-	action update_queue{
+	action update_queue(){
 		//hdr.int_header.queue_id = 
 		hdr.int_header.queue_length = (bit<32>) standard_metadata.deq_qdepth;
 	}			
@@ -172,7 +173,7 @@ control Egress(inout headers hdr,
 	  }
 }
 
-control ComputeChecksum(inout headers  hdr, inout metadata meta) {
+control MyComputeChecksum(inout headers  hdr, inout metadata meta) {
      apply {
 	update_checksum(
 	    hdr.ipv4.isValid(),
@@ -192,7 +193,7 @@ control ComputeChecksum(inout headers  hdr, inout metadata meta) {
     }
 }
 
-control Deparser(packet_out packet, in headers hdr) {
+control MyDeparser(packet_out packet, in headers hdr) {
     apply {
         packet.emit(hdr.ethernet);
         packet.emit(hdr.int_header);
@@ -201,9 +202,9 @@ control Deparser(packet_out packet, in headers hdr) {
 }
 V1Switch(
 IngressParser(),
-VerifyChecksum(),
-Ingress(),
-Egress(),
-ComputeChecksum(),
-Deparser()
+MyVerifyChecksum(),
+MyIngress(),
+MyEgress(),
+MyComputeChecksum(),
+MyDeparser()
 ) main;
