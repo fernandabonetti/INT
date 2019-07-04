@@ -3,7 +3,8 @@ import argparse
 import socket
 from scapy.fields import BitField
 from scapy.packet import Packet, bind_layers
-
+from scapy.all import sendp, send, hexdump, get_if_list, get_if_hwaddr
+from scapy.all import Ether, IP, UDP
 
 class INT(Packet):
     name = "INT" 
@@ -16,14 +17,41 @@ class INT(Packet):
         BitField("hop_delay", 0, 32)
     ]
 
+    #bind_layers(Ether, INT, type = TYPE_INT)
+    #bind_layers(INT, IP, pid = TYPE_IPV4)
+
+
+def get_if():
+	ifs=get_if_list()
+	iface=None # "h1-eth0"
+	for i in get_if_list():
+		if "enp3s0" in i:
+			iface=i
+			break;
+	if not iface:
+		print("Cannot find eth0 interface")
+		exit(1)
+	return iface
+
 def main():
-    if len(sys.argv) < 3:
-        print 'pass 2 arguments: <destination> "<message>"'
-        exit(1)
+	if len(sys.argv) < 3:
+		print('[WARNING] Please inform 3 arguments: <destination> "<message>" <flux identifier>')
+		exit(1)
+	
+	parser = argparse.ArgumentParser()
+	parser.add_argument('ip_addr', type=str, help = "Destination IP Address")
+	parser.add_argument('message', type=str, help = "Payload Message")
+	parser.add_argument('flux', type = int, default=0, help='Number to identify the flux a.k.a. DSCP')
+	args = parser.parse_args()
+	
+	address = socket.gethostbyname(sys.argv[1])
+	flux = args.flux
+	iface = get_if()
+		
+	pkt = Ether(src=get_if_hwaddr(iface), dst='ff:ff:ff:ff:ff:ff')
+	pkt = pkt /INT(protocol=0x0800) / IP(tos=flux, dst=address) / args.message
 
-    address = socket.gethostbyname(sys.argv[1])
-  
-
-
+	pkt.show()
+	
 if __name__ == '__main__':
-    main()
+	main()

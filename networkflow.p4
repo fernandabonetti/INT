@@ -14,25 +14,25 @@ typedef bit<32> qdepth_t;
 typedef bit<48> macAddr_t;
 
 header ethernet_t {
-    bit<48> dstAddr;
-    bit<48> srcAddr;
-    bit<16> etherType;
+	bit<48> dstAddr;
+	bit<48> srcAddr;
+	bit<16> etherType;
 }
 
 header ipv4_t {
-    bit<4>  version;
-    bit<4>  ihl;
-    bit<6>  dscp;
-    bit<2>  ecn;
-    bit<16> totalLen;
-    bit<16> identification;
-    bit<3>  flags;
-    bit<13> fragOffset;
-    bit<8>  ttl;
-    bit<8>  protocol;
-    bit<16> hdrChecksum;
-    bit<32> srcAddr;
-    bit<32> dstAddr;
+	bit<4>  version;
+	bit<4>  ihl;
+	bit<6>  dscp;
+	bit<2>  ecn;
+	bit<16> totalLen;
+	bit<16> identification;
+	bit<3>  flags;
+	bit<13> fragOffset;
+	bit<8>  ttl;
+	bit<8>  protocol;
+	bit<16> hdrChecksum;
+	bit<32> srcAddr;
+	bit<32> dstAddr;
 }
 
 //155 bits
@@ -53,8 +53,8 @@ struct headers {
 
 //Copy Metadata to clone
 struct metadata {
-    bit<32> mirroring_type;
-    bit<32> sw_id;
+	bit<32> mirroring_type;
+	bit<32> sw_id;
 	bit<16> protocol;
 	bit<32> queue_id;
 	bit<32> queue_length;
@@ -63,7 +63,7 @@ struct metadata {
 }
 
 error {
-    BadIPv4HeaderChecksum
+	BadIPv4HeaderChecksum
 }
 
 parser IngressParser(packet_in packet,
@@ -71,52 +71,52 @@ parser IngressParser(packet_in packet,
 				inout metadata meta,
 				inout standard_metadata_t standard_metadata) {
 
-    state start {
-        transition parse_ethernet;
-    }
+	state start {
+		transition parse_ethernet;
+	}
 
-    state parse_ethernet {
-        packet.extract(hdr.ethernet);
-        transition select(hdr.ethernet.etherType) {
-            TYPE_INT: parse_Int;
-            TYPE_IPV4: parse_ipv4;
-            default: accept;
+	state parse_ethernet {
+		packet.extract(hdr.ethernet);
+		transition select(hdr.ethernet.etherType) {
+			TYPE_INT: parse_Int;
+			TYPE_IPV4: parse_ipv4;
+			default: accept;
         }
     }
 
-    state parse_Int {
-        packet.extract(hdr.int_header);
-        transition select(hdr.int_header.protocol) {
-            TYPE_IPV4: parse_ipv4;
-            default: accept;
+	state parse_Int {
+		packet.extract(hdr.int_header);
+		transition select(hdr.int_header.protocol) {
+			TYPE_IPV4: parse_ipv4;
+			default: accept;
         }
     }
 
-    state parse_ipv4 {
-        packet.extract(hdr.ipv4);
-        transition accept;
+	state parse_ipv4 {
+		packet.extract(hdr.ipv4);
+		transition accept;
     }
 }
 
 control MyVerifyChecksum(inout headers hdr, inout metadata meta) {   
-    apply {  }
+	apply {  }
 }
 
 control MyIngress(inout headers hdr,
 				inout metadata meta,
 				inout standard_metadata_t standard_metadata) {
-    action drop() {
-        mark_to_drop(standard_metadata);
+	action drop() {
+		mark_to_drop(standard_metadata);
     }
     
-    action ipv4_forward(macAddr_t dstAddr, egressSpec_t port) {
-        standard_metadata.egress_spec = port;
-        hdr.ethernet.srcAddr = hdr.ethernet.dstAddr; //verificar
-        hdr.ethernet.dstAddr = dstAddr;
-        hdr.ipv4.ttl = hdr.ipv4.ttl - 1;
-    }
+	action ipv4_forward(macAddr_t dstAddr, egressSpec_t port) {
+		standard_metadata.egress_spec = port;
+		hdr.ethernet.srcAddr = hdr.ethernet.dstAddr; //verificar
+		hdr.ethernet.dstAddr = dstAddr;
+		hdr.ipv4.ttl = hdr.ipv4.ttl - 1;
+	}
     
-    table ipv4_lpm {
+	table ipv4_lpm {
         key = {
             hdr.ipv4.dstAddr: lpm;
         }
@@ -184,10 +184,10 @@ control MyEgress(inout headers hdr,
 		if(hdr.int_header.isValid()){
 			update_int.apply();
 		}
-        if(meta.mirroring_type == CLONE){
+		if(meta.mirroring_type == CLONE){
         	clone3(CloneType.E2E, CPU_SESSION, {meta});
-        }
-	  }
+		}
+	}
 }
 
 control MyComputeChecksum(inout headers  hdr, inout metadata meta) {
@@ -212,10 +212,10 @@ control MyComputeChecksum(inout headers  hdr, inout metadata meta) {
 
 control MyDeparser(packet_out packet, in headers hdr) {
     apply {
-        packet.emit(hdr.ethernet);
-        packet.emit(hdr.int_header);
-        packet.emit(hdr.ipv4);
-    }
+		packet.emit(hdr.ethernet);
+		packet.emit(hdr.int_header);
+		packet.emit(hdr.ipv4);
+	}
 }
 V1Switch(
 IngressParser(),
