@@ -6,6 +6,8 @@ from scapy.packet import Packet, bind_layers
 from scapy.all import sendp, send, hexdump, get_if_list, get_if_hwaddr
 from scapy.all import Ether, IP, UDP
 
+TYPE_INT = 0x1212
+
 class INT(Packet):
     name = "INT" 
     fields_desc = [
@@ -17,13 +19,9 @@ class INT(Packet):
         BitField("hop_delay", 0, 32)
     ]
 
-    #bind_layers(Ether, INT, type = TYPE_INT)
-    #bind_layers(INT, IP, pid = TYPE_IPV4)
-
-
 def get_if():
 	ifs=get_if_list()
-	iface=None # "h1-eth0"
+	iface = None 
 	for i in get_if_list():
 		if "enp3s0" in i:
 			iface=i
@@ -48,7 +46,7 @@ def main():
 	flux = args.flux
 	iface = get_if()
 		
-	pkt = Ether(src=get_if_hwaddr(iface), dst='ff:ff:ff:ff:ff:ff')
+	pkt = Ether(src=get_if_hwaddr(iface), dst='ff:ff:ff:ff:ff:ff', type = TYPE_INT)
 	pkt = pkt /INT(protocol=0x0800) / IP(tos=flux, dst=address) / args.message
 
 	pkt.show()

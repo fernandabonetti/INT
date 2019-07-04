@@ -22,8 +22,7 @@ header ethernet_t {
 header ipv4_t {
 	bit<4>  version;
 	bit<4>  ihl;
-	bit<6>  dscp;
-	bit<2>  ecn;
+	bit<8>  diffserv;
 	bit<16> totalLen;
 	bit<16> identification;
 	bit<3>  flags;
@@ -161,9 +160,9 @@ control MyEgress(inout headers hdr,
 
 	action update_timestamps(){
 		hdr.int_header.ingress_timestamp = (bit<32>) standard_metadata.enq_timestamp;
-		hdr.int_ingress.hop_delay = (bit <32>) standard_metadata.deq_timedelta;
+		hdr.int_header.hop_delay = (bit <32>) standard_metadata.deq_timedelta;
 		meta.ingress_timestamp = hdr.int_header.ingress_timestamp;
-		meta.hop_delay = hdr.int_ingress.hop_delay;
+		meta.hop_delay = hdr.int_header.hop_delay;
 	}
 
 	action update_queue(){
