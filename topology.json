@@ -2,23 +2,22 @@
     "hosts": [
         "h1",
         "h2",
-        "h3"
+        "h6",
+        "h11",
+        "h22",
+        "h66"
     ],
     "switches": {
-        "s1": {"runtime-json" : "s1-runtime.json" },
-        "s2": {"runtime-json" : "s2-runtime.json" },
-        "s3": {"runtime-json" : "s3-runtime.json" },
-        "s4": {"runtime-json" : "s4-runtime.json" },
-        "s5": {"runtime-json" : "s5-runtime.json" },
-        "s6": {"runtime-json" : "s6-runtime.json" },
-        "s7": {"runtime-json" : "s7-runtime.json" },
-        "s8": {"runtime-json" : "s8-runtime.json" }     
+        "s1": { "runtime_json" : "s1-runtime.json" },
+        "s2": { "runtime_json" : "s2-runtime.json" },
+        "s3": { "runtime_json" : "s3-runtime.json" },
+        "s4": { "runtime_json" : "s4-runtime.json" },
+        "s5": { "runtime_json" : "s5-runtime.json" },
+        "s6": { "runtime_json" : "s6-runtime.json" }
     },
     "links": [
-        ["s1", "s2"], ["s1", "s3"], ["s1", "h1"],
-        ["s2", "s3"], ["s3", "s4"], ["s4", "s5"],
-        ["s4", "s6"], ["s5", "h2"], ["s5", "s6"], 
-        ["s5", "s7"], ["s6", "s8"], ["s7", "s8"],
-        ["s8", "h3"]
+              ["h1", "s1"], ["h11", "s1"], ["s1", "s2", "0", 0.5], ["h2", "s2"],
+              ["h22", "s2"], ["s2", "s3"], ["s3", "s4"],["s4", "s5"],["s5", "s6"],
+              ["h6", "s6"], ["h66", "s6"]
     ]
 }
