@@ -1,24 +1,62 @@
-0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-| Ver=1 | 0 |0|0|0|     Reserved      | HopML=2 |RemainingHopC=6|
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|1 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0|           Reserved            |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|                           Switch Id                           |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|    L1 Port Id (Ingress)       |     L1 Port Id (Egress)       |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|    L2 Port Id (Ingress)       |     L2 Port Id (Egress)       |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|                           Hop Delay                           |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|              queue id         |            queue length       |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|                        Ingress Timestamp                      |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-
-|                         Egress Timestamp                      |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|                    Egress Port TX utilization                 |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|                           TCP Payload                         |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+Interface: h2-eth0
+###[ Ethernet ]###
+  dst       = 00:00:00:00:02:02
+  src       = 00:00:00:02:01:00
+  type      = 0x1212
+###[ SwitchTrace ]###
+     pid       = 4626
+     swid      = 1
+     qdepth    = 0
+     hop_delay = 24
+     ingress   = 252169916L
+###[ SwitchTrace ]###
+        pid       = 4626
+        swid      = 2
+        qdepth    = 0
+        hop_delay = 19
+        ingress   = 251644054L
+###[ SwitchTrace ]###
+           pid       = 4626
+           swid      = 0
+           qdepth    = 0
+           hop_delay = 0
+           ingress   = 0L
+###[ SwitchTrace ]###
+              pid       = 4626
+              swid      = 0
+              qdepth    = 0
+              hop_delay = 0
+              ingress   = 0L
+###[ SwitchTrace ]###
+                 pid       = 4626
+                 swid      = 0
+                 qdepth    = 0
+                 hop_delay = 0
+                 ingress   = 0L
+###[ SwitchTrace ]###
+                    pid       = 2048
+                    swid      = 0
+                    qdepth    = 0
+                    hop_delay = 0
+                    ingress   = 0L
+###[ IP ]###
+                       version   = 4L
+                       ihl       = 5L
+                       tos       = 0x3
+                       len       = 32
+                       id        = 1
+                       flags     = 
+                       frag      = 0L
+                       ttl       = 62
+                       proto     = udp
+                       chksum    = 0x65c7
+                       src       = 10.0.1.1
+                       dst       = 10.0.2.2
+                       \options   \
+###[ UDP ]###
+                          sport     = 1234
+                          dport     = 4321
+                          len       = 12
+                          chksum    = 0xc43
+###[ Raw ]###
+                             load      = 'Payload'
