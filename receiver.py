@@ -17,7 +17,6 @@ from datetime import datetime
 
 TYPE_INT = 0x1212
 
-
 def get_if():
     ifs=get_if_list()
     iface=None # "h1-eth0"
@@ -39,16 +38,18 @@ def showPacket(pkt, archivename):
     flux = 0
     hop_avg = 0
     if SwitchTrace in pkt:
+        pkt.show()
+        print("  Switch    Queue Len    Delay(mS)")
         for i in range(0, 6):
-            pkt.show()
             hop_avg += float(pkt[SwitchTrace][i].hop_delay)
             path.append(int(pkt[SwitchTrace][i].swid))
             hop_delays.append(float(pkt[SwitchTrace][i].hop_delay))
             timestamps.append(pkt[SwitchTrace][i].ingress)
             queue_lengths.append(int(pkt[SwitchTrace][i].qdepth))
             flux = pkt[IP].tos
+            print(path[i], queue_lengths[i],hop_delays[i])
+        print("Delay average:", hop_avg/6)
         stats[flux] = {"hop_avg": hop_avg, "path": path, "hop_delays": hop_delays, "timestamps": timestamps, "queue_stats": queue_lengths}
-
         with open(archivename, 'w') as fp:
             json.dump(stats, fp,  ensure_ascii=False, sort_keys=False)
 

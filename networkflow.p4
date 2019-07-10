@@ -22,7 +22,7 @@ header ethernet_t {
     bit<16>   etherType;
 }
 
-header int_value_t {
+header int_header_t {
     bit<16>     proto_id;
     switchID_t  swid;
     qdepth_t    qdepth;
@@ -53,7 +53,7 @@ struct metadata {
 
 struct headers {
     ethernet_t            ethernet;
-    int_value_t[MAX_HOPS] int_header;
+    int_header_t[MAX_HOPS] int_header;
     ipv4_t                ipv4;
 }
 
