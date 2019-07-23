@@ -41,7 +41,7 @@ def main():
     iface = get_if()
     flux = args.flux
     pkt = Ether(src=get_if_hwaddr(iface), dst="ff:ff:ff:ff:ff:ff", type = TYPE_INT)
-    pkt = pkt/SwitchTrace()/SwitchTrace()/SwitchTrace()/SwitchTrace()/SwitchTrace()/SwitchTrace()/IP(dst=addr, tos=flux)/TCP()/ args.message
+    pkt = pkt/SwitchTrace()/IP(dst=addr, tos=flux)/TCP()/ args.message
 
     try:
       for i in range(0,1):

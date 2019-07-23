@@ -2,7 +2,7 @@
 #include <core.p4>
 #include <v1model.p4>
 
-#define MAX_HOPS 6
+#define MAX_HOPS 7
 
 const bit<16> TYPE_IPV4 = 0x800;
 const bit<16> TYPE_INT_HEADER = 0x1212;
@@ -173,6 +173,16 @@ control MyEgress(inout headers hdr,
 				 inout metadata meta,
 				 inout standard_metadata_t standard_metadata) {
 
+				 action add_swtrace(switchID_t swid){
+				 	hdr.int_header.push_front(1);
+					hdr.int_header[0].setValid();
+					hdr.int_header[0].proto_id = TYPE_INT_HEADER;
+			 		hdr.int_header[0].swid = swid;
+			 		hdr.int_header[0].qdepth = (qdepth_t) standard_metadata.deq_qdepth;
+			 		hdr.int_header[0].hop_delay = (bit <32>) standard_metadata.deq_timedelta;  //Hop delay is in microsseconds
+			 		hdr.int_header[0].in_timestamp = (bit <48>) standard_metadata.ingress_global_timestamp;
+			 	}
+	/*
 	action add_swtrace1(switchID_t swid){
 		hdr.int_header[0].proto_id = TYPE_INT_HEADER;
 		hdr.int_header[0].swid = swid;
@@ -219,16 +229,18 @@ control MyEgress(inout headers hdr,
 		hdr.int_header[5].qdepth = (qdepth_t) standard_metadata.deq_qdepth;
 		hdr.int_header[5].hop_delay = (bit <32>) standard_metadata.deq_timedelta;  //Hop delay is in microsseconds
 		hdr.int_header[5].in_timestamp = (bit <48>) standard_metadata.ingress_global_timestamp;
-	}
+	}*/
 
 	table swtrace {
 		actions = {
-			add_swtrace1;
+			add_swtrace;
+			/*
    			add_swtrace2;
    			add_swtrace3;
    			add_swtrace4;
    			add_swtrace5;
    			add_swtrace6;
+				*/
   			NoAction;
 		}
 		  default_action = NoAction();
@@ -271,13 +283,9 @@ control MyComputeChecksum(inout headers  hdr, inout metadata meta) {
 control MyDeparser(packet_out packet, in headers hdr) {
 	apply {
 		packet.emit(hdr.ethernet);
-		packet.emit(hdr.int_header[0]);
-		packet.emit(hdr.int_header[1]);
-		packet.emit(hdr.int_header[2]);
-		packet.emit(hdr.int_header[3]);
-		packet.emit(hdr.int_header[4]);
-		packet.emit(hdr.int_header[5]);
+		packet.emit(hdr.int_header);
 		packet.emit(hdr.ipv4);
+		packet.emit(hdr.tcp);
 	}
 }
 

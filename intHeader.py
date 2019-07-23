@@ -15,4 +15,3 @@ class SwitchTrace(Packet):
 bind_layers(Ether, SwitchTrace, type=TYPE_INT)
 bind_layers(SwitchTrace, SwitchTrace, pid=TYPE_INT)
 bind_layers(SwitchTrace, IP, pid=TYPE_IPV4)
-
