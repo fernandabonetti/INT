@@ -48,28 +48,25 @@ header ipv4_t {
 
 
 header tcp_t {
-  bit<16> srcAddr;
-  bit<16> dstAddr;
-  bit<32> seqNumber;
-  bit<32> ackNumber;
-  bit<4> dataOffset;
-  bit<4> res;
-  bit<8> flags;
-  bit<16> window;
-  bit<16> checksum;
-  bit<16> urgentPtr;
+	bit<16> srcAddr;
+	bit<16> dstAddr;
+	bit<32> seqNumber;
+	bit<32> ackNumber;
+	bit<4> dataOffset;
+	bit<4> res;
+	bit<8> flags;
+	bit<16> window;
+	bit<16> checksum;
+	bit<16> urgentPtr;
 }
 
-struct metadata {
-
-}
+struct metadata {}
 
 struct headers {
 	ethernet_t				ethernet;
 	int_header_t[MAX_HOPS]	int_header;
 	ipv4_t                	ipv4;
-	tcp_t										tcp;
-
+	tcp_t					tcp;
 }
 
 /*************************************************************************
@@ -131,8 +128,9 @@ control MyVerifyChecksum(inout headers hdr, inout metadata meta) {
 **************  I N G R E S S   P R O C E S S I N G   *******************
 *************************************************************************/
 control MyIngress(inout headers hdr,
-				  inout metadata meta,
-				  inout standard_metadata_t standard_metadata) {
+				inout metadata meta,
+				inout standard_metadata_t standard_metadata) {
+
 	action drop() {
 		mark_to_drop(standard_metadata);
 	}
@@ -170,23 +168,23 @@ control MyIngress(inout headers hdr,
 *************************************************************************/
 
 control MyEgress(inout headers hdr,
-				 inout metadata meta,
-				 inout standard_metadata_t standard_metadata) {
+				inout metadata meta,
+				inout standard_metadata_t standard_metadata) {
 
-		action add_swtrace(switchID_t swid){
-				 	hdr.int_header.push_front(1);
-					hdr.int_header[0].setValid();
-					hdr.int_header[0].proto_id = TYPE_INT_HEADER;
-			 		hdr.int_header[0].swid = swid;
-			 		hdr.int_header[0].qdepth = (qdepth_t) standard_metadata.deq_qdepth;
-			 		hdr.int_header[0].hop_delay = (bit <32>) standard_metadata.deq_timedelta;  //Hop delay is in microsseconds
-			 		hdr.int_header[0].in_timestamp = (bit <48>) standard_metadata.ingress_global_timestamp;
-		}
+	action add_swtrace(switchID_t swid){
+	 	hdr.int_header.push_front(1);
+		hdr.int_header[0].setValid();
+		hdr.int_header[0].proto_id = TYPE_INT_HEADER;
+		hdr.int_header[0].swid = swid;
+		hdr.int_header[0].qdepth = (qdepth_t) standard_metadata.deq_qdepth;
+		hdr.int_header[0].hop_delay = (bit <32>) standard_metadata.deq_timedelta;  //Hop delay is in microsseconds
+		hdr.int_header[0].in_timestamp = (bit <48>) standard_metadata.ingress_global_timestamp;
+	}
 
 	table swtrace {
 		actions = {
 			add_swtrace;
-  		NoAction;
+  			NoAction;
 		}
 		default_action = NoAction();
 	}
@@ -202,20 +200,20 @@ control MyEgress(inout headers hdr,
 *************************************************************************/
 
 control MyComputeChecksum(inout headers  hdr, inout metadata meta) {
-	 apply {
-	update_checksum(
-		hdr.ipv4.isValid(),
-			{ hdr.ipv4.version,
-				hdr.ipv4.ihl,
-			  hdr.ipv4.diffserv,
-			  hdr.ipv4.totalLen,
-			  hdr.ipv4.identification,
-			  hdr.ipv4.flags,
-			  hdr.ipv4.fragOffset,
-			  hdr.ipv4.ttl,
-			  hdr.ipv4.protocol,
-			  hdr.ipv4.srcAddr,
-			  hdr.ipv4.dstAddr },
+	apply {
+		update_checksum(
+			hdr.ipv4.isValid(), {
+			hdr.ipv4.version,
+			hdr.ipv4.ihl,
+			hdr.ipv4.diffserv,
+			hdr.ipv4.totalLen,
+			hdr.ipv4.identification,
+			hdr.ipv4.flags,
+			hdr.ipv4.fragOffset,
+			hdr.ipv4.ttl,
+			hdr.ipv4.protocol,
+			hdr.ipv4.srcAddr,
+			hdr.ipv4.dstAddr },
 			hdr.ipv4.hdrChecksum,
 			HashAlgorithm.csum16);
 	}
