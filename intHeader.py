@@ -7,10 +7,9 @@ TYPE_INT = 0x1212
 
 class SwitchTrace(Packet):
     fields_desc = [ ShortField("pid", 0),
-                    IntField("swid", 0),
-                    IntField("qdepth", 0),
                     IntField("hop_delay", 0),
-                    BitField("ingress", 0, 48)]
+                    BitField("ingress", 0, 48),
+                    BitField("eq_timestamp", 0, 32)]
 
 bind_layers(Ether, SwitchTrace, type=TYPE_INT)
 bind_layers(SwitchTrace, SwitchTrace, pid=TYPE_INT)
